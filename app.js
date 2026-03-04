@@ -894,11 +894,11 @@ async function activateLicense() {
     const emailInput = document.getElementById('licenseEmail');
     const keyInput = document.getElementById('licenseKey');
     
-    const email = emailInput?.value?.trim() || '';  // Email is optional for Gumroad
+    const email = emailInput?.value?.trim();
     const key = keyInput?.value?.trim();
     
-    if (!key) {
-        showNotification('Please enter your license key', 'error');
+    if (!email || !key) {
+        showNotification('Please enter both email and license key', 'error');
         return;
     }
     
@@ -907,9 +907,7 @@ async function activateLicense() {
         const result = await window.electronAPI.setLicense(email, key);
         if (result.success) {
             isProLicensed = true;
-            // Get the actual email from the license (may come from Gumroad API)
-            const license = await window.electronAPI.getLicense();
-            showLicenseActive(license.email || email || 'Pro User');
+            showLicenseActive(email);
             unlockProFeatures();
             showNotification('🎉 ' + result.message, 'success');
         } else {

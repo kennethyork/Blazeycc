@@ -1,39 +1,33 @@
-name: Send Pro License to Sponsors
+name: Generate Sponsor License Key
 
 on:
-  # Manual trigger for testing or manually sending keys
+  # Triggers when someone sponsors
+  sponsorship:
+    types: [created]
+  
+  # Manual trigger for generating keys
   workflow_dispatch:
     inputs:
       sponsor_email:
-        description: 'Sponsor email address'
+        description: "Sponsor email address"
         required: true
       sponsor_login:
-        description: 'Sponsor GitHub username'
+        description: "Sponsor GitHub username"
         required: true
 
 jobs:
-  send-license:
+  generate-key:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
       - name: Get Sponsor Info
         id: sponsor
         run: |
-          # For sponsorship event
           if [ "${{ github.event_name }}" == "sponsorship" ]; then
             SPONSOR_LOGIN="${{ github.event.sponsorship.sponsor.login }}"
-            # GitHub doesn't expose sponsor email in webhook, use noreply
             SPONSOR_EMAIL="${SPONSOR_LOGIN}@users.noreply.github.com"
-          fi
-          
-          # For manual workflow_dispatch
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          else
             SPONSOR_LOGIN="${{ github.event.inputs.sponsor_login }}"
             SPONSOR_EMAIL="${{ github.event.inputs.sponsor_email }}"
           fi
@@ -47,63 +41,29 @@ jobs:
           LICENSE_SECRET: ${{ secrets.LICENSE_SECRET }}
         run: |
           SPONSOR_EMAIL="${{ steps.sponsor.outputs.email }}"
+          SECRET="${LICENSE_SECRET:-blazeycc-pro-2026-change-this-secret}"
           
-          # Generate key using Node.js with HMAC-SHA256
-          LICENSE_KEY=$(node -e "
-            const crypto = require('crypto');
-            const secret = process.env.LICENSE_SECRET || 'blazeycc-pro-2026-change-this-secret';
-            const email = '$SPONSOR_EMAIL'.toLowerCase().trim();
-            const hash = crypto.createHmac('sha256', secret).update(email).digest('hex');
-            const part1 = hash.slice(0, 4).toUpperCase();
-            const part2 = hash.slice(4, 8).toUpperCase();
-            const part3 = hash.slice(8, 12).toUpperCase();
-            const part4 = hash.slice(12, 16).toUpperCase();
-            console.log(part1 + '-' + part2 + '-' + part3 + '-' + part4);
-          ")
+          # Generate HMAC-SHA256 hash
+          HASH=$(echo -n "$SPONSOR_EMAIL" | openssl dgst -sha256 -hmac "$SECRET" | cut -d' ' -f2)
+          
+          # Format as XXXX-XXXX-XXXX-XXXX
+          LICENSE_KEY=$(echo "${HASH:0:16}" | tr "[:lower:]" "[:upper:]" | sed "s/\(....\)/\1-/g" | sed "s/-$//")
           
           echo "key=$LICENSE_KEY" >> $GITHUB_OUTPUT
-          echo "Generated license key for $SPONSOR_EMAIL"
       
-      - name: Send License Email via SendGrid
-        if: ${{ env.SENDGRID_API_KEY != '' }}
-        env:
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+      - name: Display License Key
         run: |
-          EMAIL="${{ steps.sponsor.outputs.email }}"
-          LOGIN="${{ steps.sponsor.outputs.login }}"
-          KEY="${{ steps.generate.outputs.key }}"
-          FROM="${FROM_EMAIL:-noreply@blazeycc.app}"
-          
-          cat > email.json << EOF
-          {
-            "personalizations": [{
-              "to": [{"email": "$EMAIL"}],
-              "subject": "🎉 Your Blazeycc Pro License Key!"
-            }],
-            "from": {"email": "$FROM", "name": "Blazeycc"},
-            "content": [{
-              "type": "text/html",
-              "value": "<div style='font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto;'><h1 style='color: #9333ea;'>Thank you for sponsoring! 💜</h1><p>Hi $LOGIN,</p><p>Here is your Blazeycc Pro license key:</p><div style='background: #1a1a2e; color: #fff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;'><code style='font-size: 24px; font-weight: bold; letter-spacing: 2px;'>$KEY</code></div><h3>How to Activate:</h3><ol><li>Open Blazeycc</li><li>Click the ⚙️ Settings button</li><li>Scroll to 'Premium Features'</li><li>Enter your email: <code>$EMAIL</code></li><li>Enter the license key above</li><li>Click 'Activate License'</li></ol><h3>Your Pro Features:</h3><ul><li>✅ No watermark on videos</li><li>✅ Custom watermark with your own logo</li><li>✅ 4K export support</li><li>✅ Faster encoding presets</li><li>✅ Batch URL recording</li><li>✅ Scheduled recordings</li><li>✅ Cloud sync (Google Drive/Dropbox)</li></ul><p>Thank you for your support!</p><p>- The Blazeycc Team</p></div>"
-            }]
-          }
-          EOF
-          
-          curl -X POST https://api.sendgrid.com/v3/mail/send \
-            -H "Authorization: Bearer $SENDGRID_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d @email.json
-          
-          echo "Email sent to $EMAIL"
-      
-      - name: Log License Key
-        run: |
+          echo ""
           echo "============================================"
-          echo "🎉 NEW SPONSOR LICENSE GENERATED"
-          echo "============================================"
-          echo "Sponsor: ${{ steps.sponsor.outputs.login }}"
-          echo "Email:   ${{ steps.sponsor.outputs.email }}"
-          echo "Key:     ${{ steps.generate.outputs.key }}"
+          echo "   SPONSOR LICENSE KEY GENERATED"
           echo "============================================"
           echo ""
-          echo "If email wasn't sent automatically, send this key manually!"
+          echo "  Sponsor:  ${{ steps.sponsor.outputs.login }}"
+          echo "  Email:    ${{ steps.sponsor.outputs.email }}"
+          echo ""
+          echo "  LICENSE KEY:"
+          echo "  ${{ steps.generate.outputs.key }}"
+          echo ""
+          echo "============================================"
+          echo "  Send this key to the sponsor via DM!"
+          echo "============================================"

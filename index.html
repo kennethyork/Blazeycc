@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src blob:; img-src 'self' data: https:;">
+    <title>URL to Video Recorder</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>🎬 URL to Video</h1>
+            </div>
+            <div class="header-actions">
+                <button id="themeToggleBtn" class="btn btn-icon" title="Toggle Theme">🌙</button>
+                <button id="historyBtn" class="btn btn-icon" title="Recording History">📁 History</button>
+                <button id="settingsBtn" class="btn btn-icon" title="Settings">⚙️</button>
+            </div>
+        </header>
+
+        <!-- Bookmarks Bar -->
+        <section class="bookmarks-section">
+            <div class="bookmarks-bar" id="bookmarksBar">
+                <span class="bookmarks-label">⭐ Bookmarks:</span>
+                <div class="bookmarks-list" id="bookmarksList"></div>
+                <button id="addBookmarkBtn" class="btn btn-small btn-add-bookmark" title="Add current page to bookmarks" disabled>+ Add</button>
+            </div>
+        </section>
+
+        <!-- URL Input Section -->
+        <section class="url-section">
+            <div class="input-group">
+                <input 
+                    type="url" 
+                    id="urlInput" 
+                    placeholder="Enter website URL (e.g., https://example.com)" 
+                    autocomplete="off"
+                >
+                <button id="loadBtn" class="btn btn-primary">
+                    🌐 Load Website
+                </button>
+            </div>
+        </section>
+
+        <!-- Recording Controls -->
+        <section class="controls-section">
+            <div class="controls">
+                <button id="recordBtn" class="btn btn-record" disabled>
+                    <span class="record-dot"></span>
+                    Start Recording
+                </button>
+                <button id="stopBtn" class="btn btn-stop" disabled>
+                    ⏹ Stop
+                </button>
+                <button id="screenshotBtn" class="btn btn-secondary" disabled>
+                    📷 Screenshot
+                </button>
+                <label class="autoscroll-toggle">
+                    <input type="checkbox" id="autoScrollToggle">
+                    <span>📜 Auto-scroll</span>
+                </label>
+            </div>
+            <div class="recording-status" id="recordingStatus">
+                <span class="status-dot"></span>
+                <span id="statusText">Ready</span>
+                <span id="recordingTimer"></span>
+            </div>
+        </section>
+
+        <!-- Quick Export Presets -->
+        <section class="quick-export-section">
+            <span class="section-label">Quick Export:</span>
+            <div class="quick-export-buttons">
+                <button class="quick-export-btn" data-preset="yt-1080p" data-format="mp4">📺 YouTube</button>
+                <button class="quick-export-btn" data-preset="ig-story" data-format="mp4">📱 Instagram</button>
+                <button class="quick-export-btn" data-preset="tiktok" data-format="mp4">🎵 TikTok</button>
+                <button class="quick-export-btn" data-preset="twitter-landscape" data-format="mp4">🐦 Twitter</button>
+                <button class="quick-export-btn" data-preset="linkedin-landscape" data-format="mp4">💼 LinkedIn</button>
+            </div>
+        </section>
+
+        <!-- Export Settings -->
+        <section class="settings-section">
+            <div class="settings-row">
+                <div class="setting-group">
+                    <label for="outputFormat">Output Format</label>
+                    <select id="outputFormat">
+                        <option value="mp4" selected>MP4 (Video)</option>
+                        <option value="webm">WebM (Video)</option>
+                        <option value="gif">GIF (Animated)</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="formatPreset">Platform Preset</label>
+                    <select id="formatPreset">
+                        <option value="custom">Custom</option>
+                        <optgroup label="YouTube">
+                            <option value="yt-1080p" selected>YouTube 1080p (1920×1080)</option>
+                            <option value="yt-720p">YouTube 720p (1280×720)</option>
+                            <option value="yt-4k">YouTube 4K (3840×2160)</option>
+                            <option value="yt-shorts">YouTube Shorts (1080×1920)</option>
+                        </optgroup>
+                        <optgroup label="Instagram">
+                            <option value="ig-feed">Instagram Feed (1080×1080)</option>
+                            <option value="ig-story">Instagram Story/Reels (1080×1920)</option>
+                            <option value="ig-landscape">Instagram Landscape (1080×566)</option>
+                        </optgroup>
+                        <optgroup label="TikTok">
+                            <option value="tiktok">TikTok (1080×1920)</option>
+                            <option value="tiktok-alt">TikTok Alt (1080×1350)</option>
+                        </optgroup>
+                        <optgroup label="Twitter/X">
+                            <option value="twitter-landscape">Twitter Landscape (1280×720)</option>
+                            <option value="twitter-square">Twitter Square (1080×1080)</option>
+                            <option value="twitter-portrait">Twitter Portrait (1080×1350)</option>
+                        </optgroup>
+                        <optgroup label="Facebook">
+                            <option value="fb-feed">Facebook Feed (1080×1080)</option>
+                            <option value="fb-story">Facebook Story (1080×1920)</option>
+                            <option value="fb-cover">Facebook Cover (1200×628)</option>
+                        </optgroup>
+                        <optgroup label="LinkedIn">
+                            <option value="linkedin-landscape">LinkedIn Landscape (1920×1080)</option>
+                            <option value="linkedin-square">LinkedIn Square (1080×1080)</option>
+                            <option value="linkedin-portrait">LinkedIn Portrait (1080×1350)</option>
+                        </optgroup>
+                        <optgroup label="Pinterest">
+                            <option value="pinterest-pin">Pinterest Pin (1000×1500)</option>
+                            <option value="pinterest-square">Pinterest Square (1000×1000)</option>
+                        </optgroup>
+                        <optgroup label="Snapchat">
+                            <option value="snapchat">Snapchat (1080×1920)</option>
+                        </optgroup>
+                        <optgroup label="Twitch">
+                            <option value="twitch-1080p">Twitch 1080p (1920×1080)</option>
+                            <option value="twitch-720p">Twitch 720p (1280×720)</option>
+                        </optgroup>
+                        <optgroup label="Vimeo">
+                            <option value="vimeo-1080p">Vimeo 1080p (1920×1080)</option>
+                            <option value="vimeo-4k">Vimeo 4K (3840×2160)</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="qualitySetting">Quality</label>
+                    <select id="qualitySetting">
+                        <option value="low">Low (smaller file)</option>
+                        <option value="medium">Medium</option>
+                        <option value="high" selected>High</option>
+                        <option value="ultra">Ultra (larger file)</option>
+                    </select>
+                </div>
+                <div class="setting-group resolution-group" id="customResolution" style="display: none;">
+                    <label>Custom Size</label>
+                    <div class="resolution-inputs">
+                        <input type="number" id="customWidth" placeholder="Width" value="1920" min="320" max="3840">
+                        <span>×</span>
+                        <input type="number" id="customHeight" placeholder="Height" value="1080" min="240" max="2160">
+                    </div>
+                </div>
+            </div>
+            <div class="settings-info" id="settingsInfo">
+                Output: MP4 • 1920×1080 • High Quality
+            </div>
+        </section>
+
+        <!-- Browser Section (webview) -->
+        <section class="browser-section">
+            <div class="browser-container" id="browserContainer">
+                <div class="placeholder" id="placeholder">
+                    <div class="placeholder-icon">🌐</div>
+                    <p><strong>Enter a URL above to load a website</strong></p>
+                    <p class="subtitle-text">
+                        The website will appear here<br>
+                        You can interact with it and record your session
+                    </p>
+                </div>
+                <webview id="webview" style="display: none;" allowpopups disablewebsecurity></webview>
+            </div>
+            <div class="browser-toolbar" id="browserToolbar" style="display: none;">
+                <button id="backBtn" class="btn btn-small">← Back</button>
+                <button id="forwardBtn" class="btn btn-small">Forward →</button>
+                <button id="reloadBtn" class="btn btn-small">🔄 Reload</button>
+                <span id="currentUrl" class="current-url"></span>
+            </div>
+        </section>
+
+        <!-- History Panel (hidden by default) -->
+        <section class="history-panel" id="historyPanel" style="display: none;">
+            <div class="panel-header">
+                <h3>📁 Recording History</h3>
+                <div class="panel-actions">
+                    <button id="clearHistoryBtn" class="btn btn-small btn-danger">Clear All</button>
+                    <button id="closeHistoryBtn" class="btn btn-small">✕ Close</button>
+                </div>
+            </div>
+            <div class="history-list" id="historyList">
+                <p class="empty-message">No recordings yet</p>
+            </div>
+        </section>
+
+        <!-- Settings Panel (hidden by default) -->
+        <section class="settings-panel" id="settingsPanel" style="display: none;">
+            <div class="panel-header">
+                <h3>⚙️ Settings</h3>
+                <button id="closeSettingsBtn" class="btn btn-small">✕ Close</button>
+            </div>
+            <div class="settings-content">
+                <div class="setting-item">
+                    <label>Save Location</label>
+                    <div class="save-path-row">
+                        <input type="text" id="savePathInput" readonly>
+                        <button id="changeSavePathBtn" class="btn btn-small">Browse...</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Video Preview Modal -->
+        <section class="preview-modal" id="previewModal" style="display: none;">
+            <div class="preview-content">
+                <div class="preview-header">
+                    <h3>📹 Preview Recording</h3>
+                    <button id="closePreviewBtn" class="btn btn-small">✕</button>
+                </div>
+                <div class="preview-video-container">
+                    <video id="previewVideo" controls></video>
+                </div>
+                <div class="preview-actions">
+                    <button id="discardBtn" class="btn btn-danger">🗑️ Discard</button>
+                    <button id="savePreviewBtn" class="btn btn-primary">💾 Save Video</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Export Progress Modal -->
+        <section class="progress-modal" id="progressModal" style="display: none;">
+            <div class="progress-content">
+                <h3>⏳ Converting Video...</h3>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <span class="progress-text" id="progressText">0%</span>
+            </div>
+        </section>
+
+        <!-- Recording Preview (hidden canvas for capture) -->
+        <canvas id="captureCanvas" style="display: none;"></canvas>
+
+        <!-- Notifications -->
+        <div class="notifications" id="notifications"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

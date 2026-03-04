@@ -1,6 +1,11 @@
-name: Generate Sponsor License Key
+name: Auto-Generate Sponsor License Key
 
 on:
+  # Auto-triggers when someone sponsors the org
+  sponsorship:
+    types: [created]
+  
+  # Manual backup
   workflow_dispatch:
     inputs:
       sponsor_email:
@@ -14,35 +19,83 @@ jobs:
   generate-key:
     runs-on: ubuntu-latest
     steps:
+      - name: Get Sponsor Info
+        id: sponsor
+        run: |
+          if [ "${{ github.event_name }}" == "sponsorship" ]; then
+            SPONSOR_LOGIN="${{ github.event.sponsorship.sponsor.login }}"
+            SPONSOR_EMAIL="${SPONSOR_LOGIN}@users.noreply.github.com"
+            TIER="${{ github.event.sponsorship.tier.name }}"
+            AMOUNT="${{ github.event.sponsorship.tier.monthly_price_in_dollars }}"
+          else
+            SPONSOR_LOGIN="${{ github.event.inputs.sponsor_login }}"
+            SPONSOR_EMAIL="${{ github.event.inputs.sponsor_email }}"
+            TIER="Manual"
+            AMOUNT="7"
+          fi
+          
+          echo "login=$SPONSOR_LOGIN" >> $GITHUB_OUTPUT
+          echo "email=$SPONSOR_EMAIL" >> $GITHUB_OUTPUT
+          echo "tier=$TIER" >> $GITHUB_OUTPUT
+          echo "amount=$AMOUNT" >> $GITHUB_OUTPUT
+      
       - name: Generate License Key
         id: generate
         env:
           LICENSE_SECRET: ${{ secrets.LICENSE_SECRET }}
         run: |
-          SPONSOR_EMAIL="${{ github.event.inputs.sponsor_email }}"
+          SPONSOR_EMAIL="${{ steps.sponsor.outputs.email }}"
           SECRET="${LICENSE_SECRET:-blazeycc-pro-2026-change-this-secret}"
           
-          # Generate HMAC-SHA256 hash
           HASH=$(echo -n "$SPONSOR_EMAIL" | openssl dgst -sha256 -hmac "$SECRET" | cut -d" " -f2)
-          
-          # Format as XXXX-XXXX-XXXX-XXXX
           LICENSE_KEY=$(echo "${HASH:0:16}" | tr "[:lower:]" "[:upper:]" | sed "s/\(....\)/\1-/g" | sed "s/-$//")
           
           echo "key=$LICENSE_KEY" >> $GITHUB_OUTPUT
+      
+      - name: Create Issue with License (Auto Notification)
+        if: github.event_name == 'sponsorship'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const login = '${{ steps.sponsor.outputs.login }}';
+            const email = '${{ steps.sponsor.outputs.email }}';
+            const key = '${{ steps.generate.outputs.key }}';
+            const tier = '${{ steps.sponsor.outputs.tier }}';
+            const amount = '${{ steps.sponsor.outputs.amount }}';
+            
+            // Create a private issue for the repo owner to see
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🎉 New Sponsor: ${login} - Send License Key`,
+              body: `## New Blazeycc Pro Sponsor!\n\n` +
+                    `**Sponsor:** @${login}\n` +
+                    `**Email:** ${email}\n` +
+                    `**Tier:** ${tier} ($${amount}/month)\n\n` +
+                    `---\n\n` +
+                    `### License Key\n\n` +
+                    `\`\`\`\n${key}\n\`\`\`\n\n` +
+                    `---\n\n` +
+                    `**Action:** Send this key to the sponsor via GitHub DM!\n\n` +
+                    `After sending, close this issue.`,
+              labels: ['sponsor', 'license-key']
+            });
       
       - name: Display License Key
         run: |
           echo ""
           echo "============================================"
-          echo "   SPONSOR LICENSE KEY GENERATED"
+          echo "   NEW SPONSOR - LICENSE KEY GENERATED"
           echo "============================================"
           echo ""
-          echo "  Sponsor:  ${{ github.event.inputs.sponsor_login }}"
-          echo "  Email:    ${{ github.event.inputs.sponsor_email }}"
+          echo "  Sponsor:  ${{ steps.sponsor.outputs.login }}"
+          echo "  Email:    ${{ steps.sponsor.outputs.email }}"
+          echo "  Tier:     ${{ steps.sponsor.outputs.tier }}"
+          echo "  Amount:   \$${{ steps.sponsor.outputs.amount }}/month"
           echo ""
           echo "  LICENSE KEY:"
           echo "  ${{ steps.generate.outputs.key }}"
           echo ""
           echo "============================================"
-          echo "  Send this key to the sponsor via DM!"
+          echo "  Check Issues for notification!"
           echo "============================================"

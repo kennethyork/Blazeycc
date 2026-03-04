@@ -9,7 +9,7 @@
  * 2. Paste this code
  * 3. Add environment variables:
  *    - GITHUB_TOKEN: Your GitHub personal access token (needs repo scope)
- *    - GITHUB_OWNER: theKennethy
+ *    - GITHUB_OWNER: blazeycc
  *    - GITHUB_REPO: Blazeycc
  *    - GUMROAD_SECRET: (optional) Your Gumroad ping secret for verification
  * 4. Deploy and copy the worker URL

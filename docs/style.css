@@ -494,6 +494,62 @@ nav {
     text-decoration: underline;
 }
 
+/* Support Section */
+.support {
+    padding: 6rem 2rem;
+    text-align: center;
+    background: var(--bg-card);
+}
+
+.support-subtitle {
+    color: var(--text-muted);
+    margin-bottom: 3rem;
+    font-size: 1.125rem;
+}
+
+.support-options {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+}
+
+.support-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem 3rem;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.3s;
+}
+
+.support-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-4px);
+}
+
+.support-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+}
+
+.support-card h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.support-card p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.pro-teaser {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    margin-top: 2rem;
+}
+
 /* CTA Section */
 .cta {
     padding: 6rem 2rem;
@@ -589,6 +645,16 @@ footer {
 
     .download-cards {
         grid-template-columns: 1fr;
+    }
+
+    .support-options {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .support-card {
+        width: 100%;
+        max-width: 300px;
     }
 }
 

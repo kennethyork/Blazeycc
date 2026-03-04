@@ -4,7 +4,7 @@
   "description": "Record any website as video",
   "main": "main.js",
   "scripts": {
-    "start": "LIBGL_ALWAYS_SOFTWARE=1 electron . --no-sandbox --disable-gpu --in-process-gpu",
+    "start": "electron . --no-sandbox --disable-gpu",
     "start:gpu": "electron . --enable-gpu",
     "build": "electron-builder",
     "build:linux": "electron-builder --linux",
@@ -63,12 +63,12 @@
         "rpm"
       ],
       "category": "Utility",
-      "icon": "build/icon.png",
-      "maintainer": "theKennethy <thekennethy@github.com>"
+      "maintainer": "theKennethy <thekennethy@github.com>",
+      "artifactName": "${productName}.${ext}"
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "artifactName": "${productName}.${ext}"
     },
     "nsis": {
       "oneClick": false,

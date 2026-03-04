@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src blob:; img-src 'self' data: https:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: 'unsafe-inline'; style-src 'self' file: 'unsafe-inline'; media-src blob: file:; img-src 'self' data: https: file:;">
     <title>Blazeycc</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Fallback styles in case CSS fails to load */
+        body { background: #1a1a2e; color: #fff; font-family: sans-serif; }
+    </style>
 </head>
-<body>
+<body style="background: #1a1a2e; color: #ffffff;">
     <div class="app-container">
         <!-- Header -->
         <header class="header">

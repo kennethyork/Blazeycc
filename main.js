@@ -65,22 +65,8 @@ function getFFmpegPath() {
     return ffmpegPath;
 }
 
-// Force CPU-only rendering - completely disable GPU
+// Force CPU-only rendering
 app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
-app.commandLine.appendSwitch('disable-accelerated-video-decode');
-app.commandLine.appendSwitch('disable-accelerated-video-encode');
-app.commandLine.appendSwitch('disable-gpu-rasterization');
-app.commandLine.appendSwitch('disable-webgl');
-app.commandLine.appendSwitch('disable-webgl2');
-app.commandLine.appendSwitch('use-gl', 'swiftshader');
-app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
-app.commandLine.appendSwitch('no-sandbox');
-app.commandLine.appendSwitch('in-process-gpu');
 
 // Set ffmpeg path after app is ready
 app.on('ready', () => {
@@ -105,6 +91,7 @@ function createWindow() {
         height: 900,
         minWidth: 900,
         minHeight: 700,
+        backgroundColor: '#1a1a2e',
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -114,7 +101,13 @@ function createWindow() {
         title: 'Blazeycc'
     });
 
-    mainWindow.loadFile('index.html');
+    // Use app:// protocol for packaged app to avoid file path issues
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+    
+    // Log when page loads successfully
+    mainWindow.webContents.on('did-finish-load', () => {
+        console.log('Page loaded successfully');
+    });
     
     // Handle certificate errors for webview
     session.defaultSession.setCertificateVerifyProc((request, callback) => {
@@ -122,8 +115,17 @@ function createWindow() {
         callback(0);
     });
     
-    // Open DevTools in development
-    // mainWindow.webContents.openDevTools();
+    // Debug: show error if page fails to load
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDesc, validatedURL) => {
+        console.error('Failed to load:', errorCode, errorDesc, validatedURL);
+    });
+    
+    // F12 to open DevTools
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'F12') {
+            mainWindow.webContents.toggleDevTools();
+        }
+    });
 }
 
 // Get the webview's webContents ID for capture

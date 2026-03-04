@@ -1,9 +1,12 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, dialog, webContents, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, dialog, webContents, session, shell, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const ffmpeg = require('fluent-ffmpeg');
 const Store = require('electron-store').default || require('electron-store');
+
+// Gumroad Product ID - Update this with your actual product permalink
+const GUMROAD_PRODUCT_ID = 'blazeycc-pro';  // Change to your Gumroad product permalink
 
 // Get watermark logo path
 function getWatermarkLogoPath() {
@@ -470,6 +473,64 @@ function generateExpectedKey(email) {
     return hash.match(/.{1,8}/g).join('-');
 }
 
+// Verify license with Gumroad API
+async function verifyGumroadLicense(licenseKey) {
+    return new Promise((resolve) => {
+        const postData = `product_id=${GUMROAD_PRODUCT_ID}&license_key=${encodeURIComponent(licenseKey)}`;
+        
+        const request = net.request({
+            method: 'POST',
+            url: 'https://api.gumroad.com/v2/licenses/verify'
+        });
+        
+        request.setHeader('Content-Type', 'application/x-www-form-urlencoded');
+        
+        let responseData = '';
+        
+        request.on('response', (response) => {
+            response.on('data', (chunk) => {
+                responseData += chunk.toString();
+            });
+            
+            response.on('end', () => {
+                try {
+                    const data = JSON.parse(responseData);
+                    if (data.success && data.purchase) {
+                        resolve({
+                            valid: true,
+                            email: data.purchase.email,
+                            name: data.purchase.full_name,
+                            purchaseDate: data.purchase.created_at,
+                            uses: data.uses,
+                            refunded: data.purchase.refunded || false,
+                            disputed: data.purchase.disputed || false
+                        });
+                    } else {
+                        resolve({ valid: false, message: data.message || 'Invalid license key' });
+                    }
+                } catch (e) {
+                    resolve({ valid: false, message: 'Failed to verify license' });
+                }
+            });
+        });
+        
+        request.on('error', (error) => {
+            console.error('Gumroad API error:', error);
+            // If offline, check cached license
+            const cachedLicense = store.get('license', null);
+            if (cachedLicense && cachedLicense.verified && cachedLicense.key === licenseKey) {
+                resolve({ valid: true, cached: true, ...cachedLicense });
+            } else {
+                resolve({ valid: false, message: 'Network error - could not verify license' });
+            }
+        });
+        
+        request.write(postData);
+        request.end();
+    });
+}
+
+// Legacy HMAC validation (for GitHub Sponsors keys)
 function validateLicenseKey(email, key) {
     if (!email || !key) return false;
     const expectedKey = generateExpectedKey(email);
@@ -479,23 +540,62 @@ function validateLicenseKey(email, key) {
 
 ipcMain.handle('get-license', async () => {
     const license = store.get('license', null);
-    if (license && license.email && license.key) {
-        const isValid = validateLicenseKey(license.email, license.key);
-        return { ...license, isValid };
+    if (license && license.key) {
+        // Check if it's a verified Gumroad license (cached)
+        if (license.verified && license.source === 'gumroad') {
+            return { ...license, isValid: true };
+        }
+        // Legacy GitHub Sponsors license
+        if (license.email) {
+            const isValid = validateLicenseKey(license.email, license.key);
+            return { ...license, isValid };
+        }
     }
     return { email: null, key: null, isValid: false };
 });
 
 ipcMain.handle('set-license', async (event, { email, key }) => {
-    const isValid = validateLicenseKey(email, key);
-    if (isValid) {
-        store.set('license', { email, key, activatedAt: new Date().toISOString() });
-        return { success: true, message: 'Pro license activated!' };
+    // First try Gumroad verification
+    const gumroadResult = await verifyGumroadLicense(key);
+    
+    if (gumroadResult.valid && !gumroadResult.refunded && !gumroadResult.disputed) {
+        // Valid Gumroad license
+        store.set('license', {
+            key,
+            email: gumroadResult.email,
+            name: gumroadResult.name,
+            source: 'gumroad',
+            verified: true,
+            activatedAt: new Date().toISOString(),
+            purchaseDate: gumroadResult.purchaseDate
+        });
+        return { success: true, message: `Pro license activated for ${gumroadResult.email}!` };
     }
-    return { success: false, message: 'Invalid license key' };
+    
+    // Fallback: Try legacy GitHub Sponsors validation
+    if (email) {
+        const isValid = validateLicenseKey(email, key);
+        if (isValid) {
+            store.set('license', {
+                email,
+                key,
+                source: 'github-sponsors',
+                verified: true,
+                activatedAt: new Date().toISOString()
+            });
+            return { success: true, message: 'Pro license activated!' };
+        }
+    }
+    
+    return { success: false, message: gumroadResult.message || 'Invalid license key' };
 });
 
 ipcMain.handle('validate-license', async (event, { email, key }) => {
+    // Try Gumroad first
+    const gumroadResult = await verifyGumroadLicense(key);
+    if (gumroadResult.valid) return true;
+    
+    // Fallback to legacy
     return validateLicenseKey(email, key);
 });
 
@@ -507,6 +607,11 @@ ipcMain.handle('clear-license', async () => {
 // Check if Pro licensed (for renderer to use)
 ipcMain.handle('is-pro-licensed', async () => {
     const license = store.get('license', null);
+    if (license && license.verified) {
+        // If Gumroad license, re-verify periodically (but use cache for now)
+        return true;
+    }
+    // Legacy check
     if (license && license.email && license.key) {
         return validateLicenseKey(license.email, license.key);
     }

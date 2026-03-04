@@ -1,7 +1,7 @@
 {
-  "name": "url-video-recorder",
+  "name": "glimpse",
   "version": "1.0.0",
-  "description": "Record any website demonstration as video",
+  "description": "Record any website as video",
   "main": "main.js",
   "scripts": {
     "start": "LIBGL_ALWAYS_SOFTWARE=1 electron . --no-sandbox --disable-gpu --in-process-gpu",
@@ -19,10 +19,10 @@
     "name": "theKennethy",
     "email": "thekennethy@github.com"
   },
-  "homepage": "https://github.com/theKennethy/glimse",
+  "homepage": "https://github.com/theKennethy/glimpse",
   "repository": {
     "type": "git",
-    "url": "https://github.com/theKennethy/glimse.git"
+    "url": "https://github.com/theKennethy/glimpse.git"
   },
   "license": "MIT",
   "devDependencies": {
@@ -30,8 +30,8 @@
     "electron-builder": "^26.8.1"
   },
   "build": {
-    "appId": "com.urlvideo.recorder",
-    "productName": "URL Video Recorder",
+    "appId": "com.thekennethy.glimpse",
+    "productName": "Glimpse",
     "asar": true,
     "asarUnpack": [
       "node_modules/ffmpeg-static/**/*"

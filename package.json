@@ -15,7 +15,15 @@
     "video",
     "electron"
   ],
-  "author": "",
+  "author": {
+    "name": "theKennethy",
+    "email": "thekennethy@github.com"
+  },
+  "homepage": "https://github.com/theKennethy/glimse",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/theKennethy/glimse.git"
+  },
   "license": "MIT",
   "devDependencies": {
     "electron": "^40.6.1",
@@ -45,7 +53,8 @@
         "rpm"
       ],
       "category": "Utility",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "maintainer": "theKennethy <thekennethy@github.com>"
     },
     "win": {
       "target": "nsis",

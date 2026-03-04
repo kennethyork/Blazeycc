@@ -7,12 +7,60 @@ const Store = require('electron-store').default || require('electron-store');
 
 // Get ffmpeg path - handle both dev and packaged scenarios
 function getFFmpegPath() {
-    let ffmpegPath = require('ffmpeg-static');
+    let ffmpegPath;
+    
+    // When packaged, check extraResources first
+    if (app.isPackaged) {
+        const extraResourcesPath = path.join(process.resourcesPath, 'ffmpeg');
+        const extraResourcesPathExe = path.join(process.resourcesPath, 'ffmpeg.exe');
+        
+        if (fs.existsSync(extraResourcesPath)) {
+            console.log('Using extraResources ffmpeg:', extraResourcesPath);
+            return extraResourcesPath;
+        }
+        if (fs.existsSync(extraResourcesPathExe)) {
+            console.log('Using extraResources ffmpeg:', extraResourcesPathExe);
+            return extraResourcesPathExe;
+        }
+    }
+    
+    try {
+        ffmpegPath = require('ffmpeg-static');
+    } catch (e) {
+        console.error('Failed to load ffmpeg-static:', e);
+        return null;
+    }
     
     // When packaged, ffmpeg-static is unpacked from asar
     if (app.isPackaged) {
-        ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+        // Handle various path formats
+        if (ffmpegPath && ffmpegPath.includes('app.asar')) {
+            ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+        }
+        
+        // Verify the file exists
+        if (!fs.existsSync(ffmpegPath)) {
+            // Try alternative paths
+            const alternatives = [
+                path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg'),
+                path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
+                path.join(__dirname, '..', 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg'),
+                path.join(__dirname, '..', 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
+                path.join(process.resourcesPath, 'ffmpeg'),
+                path.join(process.resourcesPath, 'ffmpeg.exe')
+            ];
+            
+            for (const alt of alternatives) {
+                if (fs.existsSync(alt)) {
+                    ffmpegPath = alt;
+                    break;
+                }
+            }
+        }
     }
+    
+    console.log('FFmpeg path:', ffmpegPath);
+    console.log('FFmpeg exists:', ffmpegPath ? fs.existsSync(ffmpegPath) : false);
     
     return ffmpegPath;
 }
@@ -63,7 +111,7 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             webviewTag: true // Enable webview tag
         },
-        title: 'URL to Video Recorder'
+        title: 'Blazeycc'
     });
 
     mainWindow.loadFile('index.html');
@@ -88,7 +136,7 @@ ipcMain.handle('get-webview-source', async (event, webviewId) => {
         
         // Find the main window source
         const mainWindowSource = sources.find(s => 
-            s.name === 'URL to Video Recorder' || s.name.includes('URL to Video')
+            s.name === 'Blazeycc' || s.name.includes('Blazeycc')
         );
         
         if (mainWindowSource) {

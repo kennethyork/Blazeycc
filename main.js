@@ -526,6 +526,147 @@ ipcMain.handle('delete-history-item', async (event, filePath) => {
     return newHistory;
 });
 
+// ====================
+// Cloud Storage (R2) handlers for Pro users
+// ====================
+
+ipcMain.handle('cloud-storage-upload', async (event, filePath) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        if (!fs.existsSync(filePath)) {
+            return { success: false, error: 'File not found' };
+        }
+        
+        const filename = path.basename(filePath);
+        const fileBuffer = fs.readFileSync(filePath);
+        const stats = fs.statSync(filePath);
+        
+        // Determine content type
+        const ext = path.extname(filePath).toLowerCase();
+        const contentTypes = {
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.gif': 'image/gif'
+        };
+        const contentType = contentTypes[ext] || 'application/octet-stream';
+        
+        const url = `${LICENSE_API_URL}/storage/upload?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&filename=${encodeURIComponent(filename)}`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': contentType,
+                'Content-Length': stats.size.toString()
+            },
+            body: fileBuffer
+        });
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud upload failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('cloud-storage-list', async () => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const response = await fetch(
+            `${LICENSE_API_URL}/storage/list?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}`
+        );
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud list failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('cloud-storage-download', async (event, key, filename) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const savePath = store.get('savePath');
+        const downloadPath = require('path').join(savePath, filename);
+        
+        const url = `${LICENSE_API_URL}/storage/download?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&key=${encodeURIComponent(key)}`;
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            return { success: false, error: errorData.error || 'Download failed' };
+        }
+        
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        
+        require('fs').writeFileSync(downloadPath, buffer);
+        
+        return { success: true, path: downloadPath };
+    } catch (error) {
+        console.error('Cloud download failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('cloud-storage-delete', async (event, key) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const response = await fetch(`${LICENSE_API_URL}/storage/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license.email,
+                licenseKey: license.key,
+                key
+            })
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud delete failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('cloud-storage-usage', async () => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const response = await fetch(
+            `${LICENSE_API_URL}/storage/usage?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}`
+        );
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud usage check failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
 // Save path management
 ipcMain.handle('get-save-path', async () => {
     return store.get('savePath');

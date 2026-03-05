@@ -21,6 +21,7 @@
             <div class="header-actions">
                 <button id="themeToggleBtn" class="btn btn-icon" title="Toggle Theme">🌙</button>
                 <button id="historyBtn" class="btn btn-icon" title="Recording History">📁 History</button>
+                <button id="cloudLibraryBtn" class="btn btn-icon pro-btn-locked" title="Cloud Library (Pro)">☁️ Cloud</button>
                 <button id="settingsBtn" class="btn btn-icon" title="Settings">⚙️</button>
             </div>
         </header>
@@ -211,6 +212,24 @@
             </div>
         </section>
 
+        <!-- Cloud Library Panel (hidden by default, Pro feature) -->
+        <section class="cloud-library-panel" id="cloudLibraryPanel" style="display: none;">
+            <div class="panel-header">
+                <h3>☁️ Cloud Library</h3>
+                <div class="panel-actions">
+                    <span class="storage-usage" id="storageUsageDisplay">-- / 5 GB</span>
+                    <button id="refreshCloudBtn" class="btn btn-small">🔄 Refresh</button>
+                    <button id="closeCloudLibraryBtn" class="btn btn-small">✕ Close</button>
+                </div>
+            </div>
+            <div class="storage-bar-container">
+                <div class="storage-bar" id="storageBar" style="width: 0%;"></div>
+            </div>
+            <div class="cloud-files-list" id="cloudFilesList">
+                <p class="empty-message">No files in cloud storage</p>
+            </div>
+        </section>
+
         <!-- Settings Panel (hidden by default) -->
         <section class="settings-panel" id="settingsPanel" style="display: none;">
             <div class="panel-header">
@@ -313,18 +332,18 @@
                     
                     <!-- Cloud Sync Section (Pro) -->
                     <div class="cloud-sync-section pro-feature-panel" id="cloudSyncSection" style="display: none;">
-                        <h4>☁️ Cloud Sync</h4>
-                        <p class="help-text">Auto-upload recordings to cloud storage.</p>
-                        <div class="cloud-providers">
-                            <button id="connectGoogleDrive" class="btn btn-cloud">
-                                <span class="cloud-icon">📁</span> Connect Google Drive
-                            </button>
-                            <button id="connectDropbox" class="btn btn-cloud">
-                                <span class="cloud-icon">📦</span> Connect Dropbox
-                            </button>
+                        <h4>☁️ Blazeycc Cloud Storage</h4>
+                        <p class="help-text">5GB cloud storage for your recordings. Upload and access from anywhere.</p>
+                        <div class="cloud-storage-info">
+                            <div class="storage-meter">
+                                <div class="storage-meter-fill" id="settingsStorageMeter" style="width: 0%;"></div>
+                            </div>
+                            <p class="storage-text" id="settingsStorageText">Loading...</p>
                         </div>
-                        <div class="cloud-status" id="cloudStatus">
-                            <p class="empty-message">No cloud storage connected</p>
+                        <div class="cloud-actions">
+                            <button id="openCloudLibraryFromSettings" class="btn btn-cloud">
+                                <span class="cloud-icon">📂</span> Open Cloud Library
+                            </button>
                         </div>
                     </div>
                     

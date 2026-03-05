@@ -94,3 +94,17 @@ CREATE TABLE IF NOT EXISTS recording_history (
 
 CREATE INDEX IF NOT EXISTS idx_history_email ON recording_history(email);
 CREATE INDEX IF NOT EXISTS idx_history_date ON recording_history(recorded_at);
+
+-- Cloud storage files (R2)
+CREATE TABLE IF NOT EXISTS cloud_storage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    r2_key TEXT UNIQUE NOT NULL,  -- Path in R2 bucket
+    filename TEXT NOT NULL,        -- Original filename
+    file_size INTEGER NOT NULL,    -- In bytes
+    content_type TEXT,             -- MIME type
+    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_storage_email ON cloud_storage(email);
+CREATE INDEX IF NOT EXISTS idx_storage_key ON cloud_storage(r2_key);

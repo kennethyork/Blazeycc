@@ -36,6 +36,17 @@ const elements = {
     historyList: document.getElementById('historyList'),
     clearHistoryBtn: document.getElementById('clearHistoryBtn'),
     closeHistoryBtn: document.getElementById('closeHistoryBtn'),
+    // Cloud library panel (Pro)
+    cloudLibraryBtn: document.getElementById('cloudLibraryBtn'),
+    cloudLibraryPanel: document.getElementById('cloudLibraryPanel'),
+    cloudFilesList: document.getElementById('cloudFilesList'),
+    storageUsageDisplay: document.getElementById('storageUsageDisplay'),
+    storageBar: document.getElementById('storageBar'),
+    refreshCloudBtn: document.getElementById('refreshCloudBtn'),
+    closeCloudLibraryBtn: document.getElementById('closeCloudLibraryBtn'),
+    settingsStorageMeter: document.getElementById('settingsStorageMeter'),
+    settingsStorageText: document.getElementById('settingsStorageText'),
+    openCloudLibraryFromSettings: document.getElementById('openCloudLibraryFromSettings'),
     // Settings panel
     settingsBtn: document.getElementById('settingsBtn'),
     settingsPanel: document.getElementById('settingsPanel'),
@@ -229,6 +240,15 @@ async function init() {
     elements.historyBtn.addEventListener('click', toggleHistoryPanel);
     elements.closeHistoryBtn.addEventListener('click', () => elements.historyPanel.style.display = 'none');
     elements.clearHistoryBtn.addEventListener('click', clearHistory);
+    
+    // Cloud library panel (Pro)
+    elements.cloudLibraryBtn.addEventListener('click', toggleCloudLibraryPanel);
+    elements.closeCloudLibraryBtn?.addEventListener('click', () => elements.cloudLibraryPanel.style.display = 'none');
+    elements.refreshCloudBtn?.addEventListener('click', loadCloudLibrary);
+    elements.openCloudLibraryFromSettings?.addEventListener('click', () => {
+        elements.settingsPanel.style.display = 'none';
+        toggleCloudLibraryPanel();
+    });
     
     // Settings panel
     elements.settingsBtn.addEventListener('click', toggleSettingsPanel);
@@ -738,10 +758,28 @@ function renderHistory() {
                 <span class="history-date">${date}</span>
             </div>
             <div class="history-actions">
+                <button class="btn btn-small btn-upload-cloud pro-only-btn" data-action="upload" data-path="${record.path}" title="Upload to Cloud (Pro)" style="display: none;">⬆️</button>
                 <button class="btn btn-small" data-action="open" data-path="${record.path}">📂 Show</button>
                 <button class="btn btn-small btn-danger" data-action="delete" data-path="${record.path}">🗑️</button>
             </div>
         `;
+        
+        // Show upload button for Pro users
+        if (isProLicensed) {
+            const uploadBtn = item.querySelector('[data-action="upload"]');
+            if (uploadBtn) uploadBtn.style.display = '';
+        }
+        
+        item.querySelector('[data-action="upload"]')?.addEventListener('click', async (e) => {
+            const filePath = e.target.dataset.path;
+            showNotification('Uploading to cloud...', 'info');
+            const result = await uploadToCloud(filePath);
+            if (result.success) {
+                showNotification('Uploaded to cloud!', 'success');
+            } else {
+                showNotification(result.error || 'Upload failed', 'error');
+            }
+        });
         
         item.querySelector('[data-action="open"]').addEventListener('click', () => {
             window.electronAPI.openInFolder(record.path);
@@ -761,6 +799,7 @@ function toggleHistoryPanel() {
     const isVisible = elements.historyPanel.style.display !== 'none';
     elements.historyPanel.style.display = isVisible ? 'none' : 'block';
     elements.settingsPanel.style.display = 'none';
+    elements.cloudLibraryPanel.style.display = 'none';
 }
 
 async function clearHistory() {
@@ -769,11 +808,171 @@ async function clearHistory() {
     showNotification('History cleared', 'info');
 }
 
+// =====================
+// Cloud Library functions (Pro)
+// =====================
+
+async function toggleCloudLibraryPanel() {
+    // Check if Pro license
+    const isPro = await window.electronAPI.isProLicensed();
+    if (!isPro) {
+        showNotification('Cloud Library requires a Pro license', 'error');
+        return;
+    }
+    
+    const isVisible = elements.cloudLibraryPanel.style.display !== 'none';
+    if (!isVisible) {
+        elements.cloudLibraryPanel.style.display = 'block';
+        elements.historyPanel.style.display = 'none';
+        elements.settingsPanel.style.display = 'none';
+        await loadCloudLibrary();
+    } else {
+        elements.cloudLibraryPanel.style.display = 'none';
+    }
+}
+
+async function loadCloudLibrary() {
+    elements.cloudFilesList.innerHTML = '<p class="empty-message">Loading...</p>';
+    
+    const result = await window.electronAPI.cloudStorageList();
+    
+    if (!result.success) {
+        elements.cloudFilesList.innerHTML = `<p class="empty-message">${result.error || 'Failed to load'}</p>`;
+        return;
+    }
+    
+    // Update storage usage display
+    updateStorageDisplay(result.usage);
+    
+    if (!result.files || result.files.length === 0) {
+        elements.cloudFilesList.innerHTML = '<p class="empty-message">No files in cloud storage</p>';
+        return;
+    }
+    
+    elements.cloudFilesList.innerHTML = '';
+    
+    result.files.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'cloud-file-item';
+        
+        const sizeStr = formatFileSize(file.size);
+        const dateStr = new Date(file.uploadedAt).toLocaleDateString();
+        
+        item.innerHTML = `
+            <div class="cloud-file-info">
+                <span class="cloud-file-name">${escapeHtml(file.filename)}</span>
+                <span class="cloud-file-meta">${sizeStr} • ${dateStr}</span>
+            </div>
+            <div class="cloud-file-actions">
+                <button class="btn btn-small btn-download-cloud" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}" title="Download">⬇️</button>
+                <button class="btn btn-small btn-danger btn-delete-cloud" data-key="${escapeHtml(file.key)}" title="Delete">🗑️</button>
+            </div>
+        `;
+        
+        // Download handler
+        item.querySelector('.btn-download-cloud').addEventListener('click', async (e) => {
+            const key = e.target.dataset.key;
+            const filename = e.target.dataset.filename;
+            showNotification('Downloading...', 'info');
+            const downloadResult = await window.electronAPI.cloudStorageDownload(key, filename);
+            if (downloadResult.success) {
+                showNotification(`Downloaded: ${filename}`, 'success');
+            } else {
+                showNotification(downloadResult.error || 'Download failed', 'error');
+            }
+        });
+        
+        // Delete handler
+        item.querySelector('.btn-delete-cloud').addEventListener('click', async (e) => {
+            const key = e.target.dataset.key;
+            if (confirm('Delete this file from cloud storage?')) {
+                const deleteResult = await window.electronAPI.cloudStorageDelete(key);
+                if (deleteResult.success) {
+                    showNotification('File deleted', 'success');
+                    await loadCloudLibrary();
+                } else {
+                    showNotification(deleteResult.error || 'Delete failed', 'error');
+                }
+            }
+        });
+        
+        elements.cloudFilesList.appendChild(item);
+    });
+}
+
+function updateStorageDisplay(usage) {
+    if (!usage) return;
+    
+    const usedGB = (usage.used / (1024 * 1024 * 1024)).toFixed(2);
+    const limitGB = (usage.limit / (1024 * 1024 * 1024)).toFixed(0);
+    const percent = usage.percentUsed || 0;
+    
+    // Update header display
+    if (elements.storageUsageDisplay) {
+        elements.storageUsageDisplay.textContent = `${usedGB} / ${limitGB} GB`;
+    }
+    
+    // Update storage bar
+    if (elements.storageBar) {
+        elements.storageBar.style.width = `${percent}%`;
+        elements.storageBar.classList.toggle('warning', percent > 80);
+    }
+    
+    // Update settings display
+    if (elements.settingsStorageMeter) {
+        elements.settingsStorageMeter.style.width = `${percent}%`;
+    }
+    if (elements.settingsStorageText) {
+        elements.settingsStorageText.textContent = `${usedGB} GB of ${limitGB} GB used (${percent}%)`;
+    }
+}
+
+async function uploadToCloud(filePath) {
+    const isPro = await window.electronAPI.isProLicensed();
+    if (!isPro) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    const result = await window.electronAPI.cloudStorageUpload(filePath);
+    if (result.success) {
+        // Refresh cloud library if open
+        if (elements.cloudLibraryPanel.style.display !== 'none') {
+            await loadCloudLibrary();
+        }
+    }
+    return result;
+}
+
+function formatFileSize(bytes) {
+    if (!bytes) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 // Settings functions
-function toggleSettingsPanel() {
+async function toggleSettingsPanel() {
     const isVisible = elements.settingsPanel.style.display !== 'none';
     elements.settingsPanel.style.display = isVisible ? 'none' : 'block';
     elements.historyPanel.style.display = 'none';
+    elements.cloudLibraryPanel.style.display = 'none';
+    
+    // Load cloud storage usage for Pro users
+    if (!isVisible) {
+        const isPro = await window.electronAPI.isProLicensed();
+        if (isPro) {
+            const usage = await window.electronAPI.cloudStorageUsage();
+            if (usage.success) {
+                updateStorageDisplay(usage);
+            }
+        }
+    }
 }
 
 async function loadSavePath() {
@@ -957,6 +1156,12 @@ function unlockProFeatures() {
     proCheckboxes.forEach(cb => {
         cb.disabled = false;
     });
+    
+    // Unlock cloud library button
+    if (elements.cloudLibraryBtn) {
+        elements.cloudLibraryBtn.classList.remove('pro-btn-locked');
+        elements.cloudLibraryBtn.classList.add('unlocked');
+    }
 }
 
 function lockProFeatures() {
@@ -971,6 +1176,12 @@ function lockProFeatures() {
         cb.disabled = true;
         cb.checked = false;
     });
+    
+    // Lock cloud library button
+    if (elements.cloudLibraryBtn) {
+        elements.cloudLibraryBtn.classList.add('pro-btn-locked');
+        elements.cloudLibraryBtn.classList.remove('unlocked');
+    }
 }
 
 async function activateLicense() {

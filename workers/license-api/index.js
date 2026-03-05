@@ -57,6 +57,31 @@ export default {
             }
 
             // =====================
+            // CLOUD STORAGE ENDPOINTS (R2)
+            // =====================
+            
+            // Upload video to cloud
+            if (path === '/storage/upload' && request.method === 'POST') {
+                return handleStorageUpload(request, env, corsHeaders);
+            }
+            // List user's cloud videos
+            if (path === '/storage/list' && request.method === 'GET') {
+                return handleStorageList(request, env, corsHeaders);
+            }
+            // Download video from cloud
+            if (path === '/storage/download' && request.method === 'GET') {
+                return handleStorageDownload(request, env, corsHeaders);
+            }
+            // Delete video from cloud
+            if (path === '/storage/delete' && request.method === 'POST') {
+                return handleStorageDelete(request, env, corsHeaders);
+            }
+            // Get storage usage
+            if (path === '/storage/usage' && request.method === 'GET') {
+                return handleStorageUsage(request, env, corsHeaders);
+            }
+
+            // =====================
             // ADMIN ENDPOINTS
             // =====================
             
@@ -711,4 +736,254 @@ async function logAnalytics(db, eventType, email, licenseKey, request, metadata 
         metadata ? JSON.stringify(metadata) : null,
         cf.country || null
     ).run();
+}
+
+// =====================
+// CLOUD STORAGE HANDLERS (R2)
+// =====================
+
+const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024 * 1024; // 5GB default
+
+function checkR2Available(env, corsHeaders) {
+    if (!env.STORAGE) {
+        return jsonResponse({ 
+            error: 'Cloud storage not configured',
+            message: 'Please enable R2 in Cloudflare Dashboard and create bucket "blazeycc-recordings"'
+        }, 503, corsHeaders);
+    }
+    return null;
+}
+
+async function handleStorageUpload(request, env, corsHeaders) {
+    const r2Check = checkR2Available(env, corsHeaders);
+    if (r2Check) return r2Check;
+    
+    const url = new URL(request.url);
+    const email = url.searchParams.get('email');
+    const licenseKey = url.searchParams.get('licenseKey');
+    const filename = url.searchParams.get('filename');
+    const contentType = request.headers.get('content-type') || 'video/mp4';
+    
+    if (!email || !filename) {
+        return jsonResponse({ error: 'Email and filename required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    // Check current storage usage
+    const usage = await calculateStorageUsage(env, normalizedEmail);
+    const contentLength = parseInt(request.headers.get('content-length') || '0');
+    const limitBytes = parseInt(env.STORAGE_LIMIT_MB || '5120') * 1024 * 1024;
+    
+    if (usage + contentLength > limitBytes) {
+        return jsonResponse({ 
+            error: 'Storage limit exceeded',
+            used: usage,
+            limit: limitBytes,
+            available: limitBytes - usage
+        }, 413, corsHeaders);
+    }
+    
+    // Generate unique key for R2
+    const timestamp = Date.now();
+    const r2Key = `${normalizedEmail}/${timestamp}-${filename}`;
+    
+    // Upload to R2
+    await env.STORAGE.put(r2Key, request.body, {
+        httpMetadata: { contentType },
+        customMetadata: {
+            email: normalizedEmail,
+            filename,
+            uploadedAt: new Date().toISOString(),
+            size: contentLength.toString()
+        }
+    });
+    
+    // Record in database
+    await env.DB.prepare(`
+        INSERT INTO cloud_storage (email, r2_key, filename, file_size, content_type)
+        VALUES (?, ?, ?, ?, ?)
+    `).bind(normalizedEmail, r2Key, filename, contentLength, contentType).run();
+    
+    await logAnalytics(env.DB, 'storage_upload', normalizedEmail, licenseKey, request, { filename, size: contentLength });
+    
+    return jsonResponse({ 
+        success: true, 
+        key: r2Key,
+        filename,
+        size: contentLength,
+        usedAfter: usage + contentLength,
+        limit: limitBytes
+    }, 200, corsHeaders);
+}
+
+async function handleStorageList(request, env, corsHeaders) {
+    const r2Check = checkR2Available(env, corsHeaders);
+    if (r2Check) return r2Check;
+    
+    const url = new URL(request.url);
+    const email = url.searchParams.get('email');
+    const licenseKey = url.searchParams.get('licenseKey');
+    
+    if (!email) {
+        return jsonResponse({ error: 'Email required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    // Get list from database
+    const result = await env.DB.prepare(`
+        SELECT id, r2_key, filename, file_size, content_type, uploaded_at
+        FROM cloud_storage 
+        WHERE email = ? 
+        ORDER BY uploaded_at DESC
+    `).bind(normalizedEmail).all();
+    
+    const limitBytes = parseInt(env.STORAGE_LIMIT_MB || '5120') * 1024 * 1024;
+    const usage = await calculateStorageUsage(env, normalizedEmail);
+    
+    return jsonResponse({ 
+        success: true, 
+        files: result.results.map(f => ({
+            id: f.id,
+            key: f.r2_key,
+            filename: f.filename,
+            size: f.file_size,
+            contentType: f.content_type,
+            uploadedAt: f.uploaded_at
+        })),
+        usage: {
+            used: usage,
+            limit: limitBytes,
+            available: limitBytes - usage,
+            percentUsed: Math.round((usage / limitBytes) * 100)
+        }
+    }, 200, corsHeaders);
+}
+
+async function handleStorageDownload(request, env, corsHeaders) {
+    const r2Check = checkR2Available(env, corsHeaders);
+    if (r2Check) return r2Check;
+    
+    const url = new URL(request.url);
+    const email = url.searchParams.get('email');
+    const licenseKey = url.searchParams.get('licenseKey');
+    const key = url.searchParams.get('key');
+    
+    if (!email || !key) {
+        return jsonResponse({ error: 'Email and key required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    // Verify the key belongs to this user
+    if (!key.startsWith(normalizedEmail + '/')) {
+        return jsonResponse({ error: 'Access denied' }, 403, corsHeaders);
+    }
+    
+    // Get from R2
+    const object = await env.STORAGE.get(key);
+    
+    if (!object) {
+        return jsonResponse({ error: 'File not found' }, 404, corsHeaders);
+    }
+    
+    const headers = new Headers(corsHeaders);
+    headers.set('Content-Type', object.httpMetadata?.contentType || 'application/octet-stream');
+    headers.set('Content-Length', object.size);
+    headers.set('Content-Disposition', `attachment; filename="${object.customMetadata?.filename || 'download'}"`);
+    
+    return new Response(object.body, { headers });
+}
+
+async function handleStorageDelete(request, env, corsHeaders) {
+    const r2Check = checkR2Available(env, corsHeaders);
+    if (r2Check) return r2Check;
+    
+    const { email, licenseKey, key } = await request.json();
+    
+    if (!email || !key) {
+        return jsonResponse({ error: 'Email and key required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    // Verify the key belongs to this user
+    if (!key.startsWith(normalizedEmail + '/')) {
+        return jsonResponse({ error: 'Access denied' }, 403, corsHeaders);
+    }
+    
+    // Delete from R2
+    await env.STORAGE.delete(key);
+    
+    // Delete from database
+    await env.DB.prepare(
+        'DELETE FROM cloud_storage WHERE r2_key = ? AND email = ?'
+    ).bind(key, normalizedEmail).run();
+    
+    await logAnalytics(env.DB, 'storage_delete', normalizedEmail, licenseKey, request, { key });
+    
+    return jsonResponse({ success: true, deleted: key }, 200, corsHeaders);
+}
+
+async function handleStorageUsage(request, env, corsHeaders) {
+    // Note: Usage check doesn't require R2, just DB
+    const url = new URL(request.url);
+    const email = url.searchParams.get('email');
+    const licenseKey = url.searchParams.get('licenseKey');
+    
+    if (!email) {
+        return jsonResponse({ error: 'Email required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    const usage = await calculateStorageUsage(env, normalizedEmail);
+    const limitBytes = parseInt(env.STORAGE_LIMIT_MB || '5120') * 1024 * 1024;
+    
+    return jsonResponse({ 
+        success: true,
+        used: usage,
+        limit: limitBytes,
+        available: limitBytes - usage,
+        percentUsed: Math.round((usage / limitBytes) * 100)
+    }, 200, corsHeaders);
+}
+
+async function calculateStorageUsage(env, email) {
+    const result = await env.DB.prepare(
+        'SELECT COALESCE(SUM(file_size), 0) as total FROM cloud_storage WHERE email = ?'
+    ).bind(email).first();
+    
+    return result?.total || 0;
 }

@@ -636,7 +636,8 @@ html[data-theme="light"] body {
 
 /* History Panel */
 .history-panel,
-.settings-panel {
+.settings-panel,
+.cloud-library-panel {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -724,6 +725,122 @@ html[data-theme="light"] body {
     text-align: center;
     padding: 2rem;
     font-style: italic;
+}
+
+/* Cloud Library Panel */
+.cloud-library-panel .storage-usage {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.storage-bar-container {
+    background: var(--bg-input);
+    border-radius: 4px;
+    height: 8px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.storage-bar {
+    background: linear-gradient(90deg, #4a90d9, #7c3aed);
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.storage-bar.warning {
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+}
+
+.cloud-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.cloud-file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-input);
+    padding: 1rem;
+    border-radius: 8px;
+    gap: 1rem;
+}
+
+.cloud-file-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.cloud-file-name {
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cloud-file-meta {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.cloud-file-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.btn-upload-cloud {
+    background: linear-gradient(135deg, #4a90d9, #7c3aed);
+    color: white;
+}
+
+.btn-upload-cloud:hover {
+    background: linear-gradient(135deg, #3a80c9, #6c2add);
+}
+
+/* Storage meter in settings */
+.storage-meter {
+    background: var(--bg-input);
+    border-radius: 4px;
+    height: 12px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.storage-meter-fill {
+    background: linear-gradient(90deg, #4a90d9, #7c3aed);
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.storage-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.cloud-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.5rem;
+}
+
+/* Pro button locked state */
+.pro-btn-locked {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.pro-btn-locked.unlocked {
+    opacity: 1;
+    cursor: pointer;
 }
 
 /* Settings Panel Content */
@@ -1040,11 +1157,16 @@ html[data-theme="light"] body {
 }
 
 .history-panel,
-.settings-panel {
+.settings-panel,
+.cloud-library-panel {
     background: var(--bg-card);
 }
 
 .history-item {
+    background: var(--bg-input);
+}
+
+.cloud-file-item {
     background: var(--bg-input);
 }
 

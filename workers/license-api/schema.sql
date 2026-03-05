@@ -75,3 +75,22 @@ CREATE TABLE IF NOT EXISTS analytics (
 CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics(event_type);
 CREATE INDEX IF NOT EXISTS idx_analytics_date ON analytics(created_at);
 CREATE INDEX IF NOT EXISTS idx_analytics_email ON analytics(email);
+
+-- Recording history synced from app
+CREATE TABLE IF NOT EXISTS recording_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    url TEXT,
+    duration INTEGER,         -- Duration in seconds
+    format TEXT,              -- mp4, webm, gif
+    resolution TEXT,          -- e.g. "1920x1080"
+    file_size INTEGER,        -- In bytes
+    platform TEXT,            -- Social media platform preset
+    local_path TEXT,          -- Path on user's machine
+    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_history_email ON recording_history(email);
+CREATE INDEX IF NOT EXISTS idx_history_date ON recording_history(recorded_at);

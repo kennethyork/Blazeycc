@@ -4,6 +4,11 @@ const fs = require('fs');
 const os = require('os');
 const ffmpeg = require('fluent-ffmpeg');
 const Store = require('electron-store').default || require('electron-store');
+const crypto = require('crypto');
+
+// License API configuration
+const LICENSE_SECRET = process.env.LICENSE_SECRET || '4f6fab93b5f0bfb47f3431ab19b230994e94cc946d479e27cf82b1b85c7aaee3';
+const LICENSE_API_URL = 'https://blazeycc-license.kennethhy-me.workers.dev';
 
 // Get watermark logo path
 function getWatermarkLogoPath() {
@@ -400,29 +405,125 @@ ipcMain.handle('remove-bookmark', async (event, url) => {
     return bookmarks;
 });
 
-// Recording history management
+// Recording history management (local + cloud sync for Pro users)
+async function syncHistoryToCloud(record) {
+    try {
+        const license = store.get('license', null);
+        if (!license?.email || !license?.key) return;
+        
+        await fetch(`${LICENSE_API_URL}/history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license.email,
+                licenseKey: license.key,
+                record
+            })
+        });
+    } catch (error) {
+        console.error('History cloud sync failed:', error);
+    }
+}
+
+async function fetchCloudHistory() {
+    try {
+        const license = store.get('license', null);
+        if (!license?.email || !license?.key) return null;
+        
+        const response = await fetch(
+            `${LICENSE_API_URL}/history?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&limit=50`
+        );
+        const data = await response.json();
+        return data.success ? data.history : null;
+    } catch (error) {
+        console.error('History cloud fetch failed:', error);
+        return null;
+    }
+}
+
 ipcMain.handle('get-history', async () => {
-    return store.get('history', []);
+    // Get local history
+    const localHistory = store.get('history', []);
+    
+    // Try to get cloud history for Pro users
+    const cloudHistory = await fetchCloudHistory();
+    
+    if (cloudHistory) {
+        // Merge: cloud is authoritative, but keep local items not in cloud
+        const cloudPaths = new Set(cloudHistory.map(h => h.path));
+        const uniqueLocal = localHistory.filter(h => !cloudPaths.has(h.path));
+        const merged = [...cloudHistory, ...uniqueLocal].slice(0, 50);
+        store.set('history', merged);
+        return merged;
+    }
+    
+    return localHistory;
 });
 
 ipcMain.handle('add-history', async (event, record) => {
     const history = store.get('history', []);
-    history.unshift({ ...record, recordedAt: Date.now() });
+    const newRecord = { ...record, recordedAt: Date.now() };
+    history.unshift(newRecord);
     // Keep last 50 recordings
     if (history.length > 50) history.pop();
     store.set('history', history);
+    
+    // Sync to cloud for Pro users (async, non-blocking)
+    syncHistoryToCloud(newRecord);
+    
     return history;
 });
 
 ipcMain.handle('clear-history', async () => {
     store.set('history', []);
+    
+    // Clear cloud history for Pro users
+    try {
+        const license = store.get('license', null);
+        if (license?.email && license?.key) {
+            await fetch(`${LICENSE_API_URL}/history/clear`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: license.email,
+                    licenseKey: license.key
+                })
+            });
+        }
+    } catch (error) {
+        console.error('Cloud history clear failed:', error);
+    }
+    
     return [];
 });
 
 ipcMain.handle('delete-history-item', async (event, filePath) => {
-    const history = store.get('history', []).filter(h => h.path !== filePath);
-    store.set('history', history);
-    return history;
+    const history = store.get('history', []);
+    const itemToDelete = history.find(h => h.path === filePath);
+    const newHistory = history.filter(h => h.path !== filePath);
+    store.set('history', newHistory);
+    
+    // Delete from cloud for Pro users
+    if (itemToDelete?.id) {
+        try {
+            const license = store.get('license', null);
+            if (license?.email && license?.key) {
+                await fetch(`${LICENSE_API_URL}/history/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: license.email,
+                        licenseKey: license.key,
+                        id: itemToDelete.id
+                    })
+                });
+            }
+        } catch (error) {
+            console.error('Cloud history delete failed:', error);
+        }
+    }
+    
+    return newHistory;
 });
 
 // Save path management
@@ -467,10 +568,6 @@ ipcMain.handle('set-theme', async (event, theme) => {
 });
 
 // License management
-const crypto = require('crypto');
-const LICENSE_SECRET = process.env.LICENSE_SECRET || '4f6fab93b5f0bfb47f3431ab19b230994e94cc946d479e27cf82b1b85c7aaee3';
-const LICENSE_API_URL = 'https://blazeycc-license.kennethhy-me.workers.dev';
-
 function generateExpectedKey(email) {
     const normalizedEmail = email.toLowerCase().trim();
     const hash = crypto.createHmac('sha256', LICENSE_SECRET)

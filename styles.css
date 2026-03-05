@@ -87,7 +87,7 @@ body {
 }
 
 .btn-icon:hover {
-    background: #3a3a4e;
+    background: var(--bg-hover);
 }
 
 /* Bookmarks Bar */
@@ -99,7 +99,7 @@ body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: #2a2a3e;
+    background: var(--bg-card);
     padding: 0.5rem 1rem;
     border-radius: 8px;
     overflow-x: auto;
@@ -122,7 +122,7 @@ body {
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    background: #1a1a2e;
+    background: var(--bg-input);
     padding: 0.35rem 0.75rem;
     border-radius: 4px;
     font-size: 0.85rem;
@@ -132,7 +132,7 @@ body {
 }
 
 .bookmark-item:hover {
-    background: #333;
+    background: var(--bg-hover);
 }
 
 .bookmark-title {
@@ -177,10 +177,10 @@ body {
 .input-group input {
     flex: 1;
     padding: 1rem 1.5rem;
-    border: 2px solid #333;
+    border: 2px solid var(--border-color);
     border-radius: 8px;
-    background: #2a2a3e;
-    color: #fff;
+    background: var(--bg-card);
+    color: var(--text-primary);
     font-size: 1rem;
     transition: border-color 0.3s;
 }
@@ -191,7 +191,7 @@ body {
 }
 
 .input-group input::placeholder {
-    color: #666;
+    color: var(--text-muted);
 }
 
 /* Buttons */
@@ -248,12 +248,12 @@ body {
 }
 
 .btn-secondary {
-    background: #3a3a4e;
-    color: #fff;
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: #4a4a5e;
+    background: var(--bg-card);
 }
 
 .record-dot {
@@ -312,7 +312,7 @@ body {
 
 /* Settings Section */
 .settings-section {
-    background: #2a2a3e;
+    background: var(--bg-card);
     border-radius: 12px;
     padding: 1rem 1.5rem;
     margin-bottom: 1.5rem;
@@ -340,10 +340,10 @@ body {
 .setting-group select,
 .setting-group input {
     padding: 0.6rem 1rem;
-    border: 2px solid #333;
+    border: 2px solid var(--border-color);
     border-radius: 6px;
-    background: #1a1a2e;
-    color: #fff;
+    background: var(--bg-input);
+    color: var(--text-primary);
     font-size: 0.9rem;
     min-width: 180px;
     cursor: pointer;
@@ -356,7 +356,7 @@ body {
 }
 
 .setting-group select option {
-    background: #1a1a2e;
+    background: var(--bg-input);
 }
 
 .setting-group select optgroup {
@@ -383,14 +383,14 @@ body {
 .settings-info {
     margin-top: 0.75rem;
     font-size: 0.85rem;
-    color: #4a90d9;
+    color: var(--accent-primary);
     padding: 0.5rem 0;
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border-color);
 }
 
 /* Source Section */
 .source-section {
-    background: #2a2a3e;
+    background: var(--bg-card);
     border-radius: 12px;
     padding: 1.5rem;
     margin-bottom: 1.5rem;
@@ -398,7 +398,7 @@ body {
 
 .source-section h3 {
     margin-bottom: 1rem;
-    color: #fff;
+    color: var(--text-primary);
 }
 
 .source-grid {
@@ -409,8 +409,8 @@ body {
 }
 
 .source-item {
-    background: #1a1a2e;
-    border: 2px solid #333;
+    background: var(--bg-input);
+    border: 2px solid var(--border-color);
     border-radius: 8px;
     padding: 0.75rem;
     cursor: pointer;
@@ -448,8 +448,8 @@ body {
 }
 
 .browser-container {
-    background: #1a1a2e;
-    border: 2px solid #333;
+    background: var(--bg-input);
+    border: 2px solid var(--border-color);
     border-radius: 12px 12px 0 0;
     min-height: 500px;
     display: flex;
@@ -464,8 +464,8 @@ body {
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background: #2a2a3e;
-    border: 2px solid #333;
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
     border-top: none;
     border-radius: 0 0 12px 12px;
 }
@@ -473,8 +473,8 @@ body {
 .browser-toolbar .btn-small {
     padding: 0.5rem 0.75rem;
     font-size: 0.85rem;
-    background: #3a3a4e;
-    color: #fff;
+    background: var(--bg-hover);
+    color: var(--text-primary);
     border: none;
     border-radius: 6px;
     cursor: pointer;
@@ -482,7 +482,7 @@ body {
 }
 
 .browser-toolbar .btn-small:hover {
-    background: #4a4a5e;
+    background: var(--bg-primary);
 }
 
 .current-url {
@@ -635,7 +635,7 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #2a2a3e;
+    background: var(--bg-card);
     border-radius: 12px;
     padding: 1.5rem;
     width: 90%;
@@ -652,11 +652,11 @@ body {
     align-items: center;
     margin-bottom: 1rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .panel-header h3 {
-    color: #fff;
+    color: var(--text-primary);
     font-size: 1.25rem;
 }
 
@@ -675,7 +675,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: #1a1a2e;
+    background: var(--bg-input);
     padding: 1rem;
     border-radius: 8px;
     gap: 1rem;
@@ -690,7 +690,7 @@ body {
 }
 
 .history-filename {
-    color: #fff;
+    color: var(--text-primary);
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -704,7 +704,7 @@ body {
 
 .history-date {
     font-size: 0.8rem;
-    color: #666;
+    color: var(--text-muted);
 }
 
 .history-actions {
@@ -714,7 +714,7 @@ body {
 }
 
 .empty-message {
-    color: #666;
+    color: var(--text-muted);
     text-align: center;
     padding: 2rem;
     font-style: italic;
@@ -746,10 +746,10 @@ body {
 .save-path-row input {
     flex: 1;
     padding: 0.6rem 1rem;
-    border: 2px solid #333;
+    border: 2px solid var(--border-color);
     border-radius: 6px;
-    background: #1a1a2e;
-    color: #fff;
+    background: var(--bg-input);
+    color: var(--text-primary);
     font-size: 0.9rem;
 }
 

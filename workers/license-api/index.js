@@ -41,6 +41,20 @@ export default {
             if (path === '/track' && request.method === 'POST') {
                 return handleTrack(request, env, corsHeaders);
             }
+            
+            // Recording history (synced from app)
+            if (path === '/history' && request.method === 'POST') {
+                return handleHistoryAdd(request, env, corsHeaders);
+            }
+            if (path === '/history' && request.method === 'GET') {
+                return handleHistoryGet(request, env, corsHeaders);
+            }
+            if (path === '/history/delete' && request.method === 'POST') {
+                return handleHistoryDelete(request, env, corsHeaders);
+            }
+            if (path === '/history/clear' && request.method === 'POST') {
+                return handleHistoryClear(request, env, corsHeaders);
+            }
 
             // =====================
             // ADMIN ENDPOINTS
@@ -271,6 +285,147 @@ async function handleTrack(request, env, corsHeaders) {
     await logAnalytics(env.DB, action, email, licenseKey, request, metadata);
     
     return jsonResponse({ success: true }, 200, corsHeaders);
+}
+
+// =====================
+// HISTORY HANDLERS
+// =====================
+
+async function handleHistoryAdd(request, env, corsHeaders) {
+    const { email, licenseKey, record } = await request.json();
+    
+    if (!email || !record || !record.filename) {
+        return jsonResponse({ error: 'Email and record with filename required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    await env.DB.prepare(`
+        INSERT INTO recording_history 
+        (email, filename, url, duration, format, resolution, file_size, platform, local_path, recorded_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+        normalizedEmail,
+        record.filename,
+        record.url || null,
+        record.duration || null,
+        record.format || null,
+        record.resolution || null,
+        record.fileSize || null,
+        record.platform || null,
+        record.path || null,
+        record.recordedAt ? new Date(record.recordedAt).toISOString() : new Date().toISOString()
+    ).run();
+    
+    return jsonResponse({ success: true }, 200, corsHeaders);
+}
+
+async function handleHistoryGet(request, env, corsHeaders) {
+    const url = new URL(request.url);
+    const email = url.searchParams.get('email');
+    const licenseKey = url.searchParams.get('licenseKey');
+    const limit = parseInt(url.searchParams.get('limit') || '50');
+    
+    if (!email) {
+        return jsonResponse({ error: 'Email required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    const result = await env.DB.prepare(`
+        SELECT id, filename, url, duration, format, resolution, file_size, platform, local_path, recorded_at
+        FROM recording_history 
+        WHERE email = ? 
+        ORDER BY recorded_at DESC 
+        LIMIT ?
+    `).bind(normalizedEmail, limit).all();
+    
+    return jsonResponse({ 
+        success: true, 
+        history: result.results.map(r => ({
+            id: r.id,
+            filename: r.filename,
+            url: r.url,
+            duration: r.duration,
+            format: r.format,
+            resolution: r.resolution,
+            fileSize: r.file_size,
+            platform: r.platform,
+            path: r.local_path,
+            recordedAt: r.recorded_at
+        }))
+    }, 200, corsHeaders);
+}
+
+async function handleHistoryDelete(request, env, corsHeaders) {
+    const { email, licenseKey, id } = await request.json();
+    
+    if (!email || !id) {
+        return jsonResponse({ error: 'Email and id required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    await env.DB.prepare(
+        'DELETE FROM recording_history WHERE id = ? AND email = ?'
+    ).bind(id, normalizedEmail).run();
+    
+    return jsonResponse({ success: true }, 200, corsHeaders);
+}
+
+async function handleHistoryClear(request, env, corsHeaders) {
+    const { email, licenseKey } = await request.json();
+    
+    if (!email) {
+        return jsonResponse({ error: 'Email required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    await env.DB.prepare(
+        'DELETE FROM recording_history WHERE email = ?'
+    ).bind(normalizedEmail).run();
+    
+    return jsonResponse({ success: true }, 200, corsHeaders);
+}
+
+async function verifyLicenseKey(env, email, licenseKey) {
+    if (!licenseKey) return false;
+    
+    // Check if license is revoked
+    const revoked = await env.DB.prepare(
+        'SELECT 1 FROM revoked_licenses WHERE license_key = ?'
+    ).bind(licenseKey).first();
+    
+    if (revoked) return false;
+    
+    // Generate expected key and compare
+    const expectedKey = await generateLicenseKey(email, env.LICENSE_SECRET);
+    return licenseKey === expectedKey;
 }
 
 // =====================

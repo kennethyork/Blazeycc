@@ -1,9 +1,9 @@
 name: Auto-Generate Sponsor License Key
 
 on:
-  # Auto-triggers when someone sponsors the org
-  sponsorship:
-    types: [created]
+  # Triggered by Cloudflare Worker webhook
+  repository_dispatch:
+    types: [sponsor_created]
   
   # Manual trigger for testing
   workflow_dispatch:
@@ -25,11 +25,11 @@ jobs:
       - name: Get Sponsor Info
         id: sponsor
         run: |
-          if [ "${{ github.event_name }}" == "sponsorship" ]; then
-            SPONSOR_LOGIN="${{ github.event.sponsorship.sponsor.login }}"
-            SPONSOR_EMAIL="${SPONSOR_LOGIN}@users.noreply.github.com"
-            TIER="${{ github.event.sponsorship.tier.name }}"
-            AMOUNT="${{ github.event.sponsorship.tier.monthly_price_in_dollars }}"
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            SPONSOR_LOGIN="${{ github.event.client_payload.sponsor_login }}"
+            SPONSOR_EMAIL="${{ github.event.client_payload.sponsor_email }}"
+            TIER="${{ github.event.client_payload.tier_name }}"
+            AMOUNT="${{ github.event.client_payload.amount }}"
           else
             SPONSOR_LOGIN="${{ github.event.inputs.sponsor_login }}"
             SPONSOR_EMAIL="${{ github.event.inputs.sponsor_email }}"
@@ -56,7 +56,7 @@ jobs:
           echo "key=$LICENSE_KEY" >> $GITHUB_OUTPUT
       
       - name: Create Issue with License (Auto Notification)
-        if: github.event_name == 'sponsorship'
+        if: github.event_name == 'repository_dispatch'
         uses: actions/github-script@v7
         with:
           script: |
@@ -79,7 +79,7 @@ jobs:
                     `### License Key\n\n` +
                     `\`\`\`\n${key}\n\`\`\`\n\n` +
                     `---\n\n` +
-                    `**Action:** Send this key to the sponsor via GitHub DM!\n\n` +
+                    `**Action:** Send this key to the sponsor via email!\n\n` +
                     `After sending, close this issue.`,
               labels: ['sponsor', 'license-key']
             });

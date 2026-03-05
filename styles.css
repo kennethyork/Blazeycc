@@ -17,11 +17,11 @@
 }
 
 [data-theme="light"] {
-    --bg-primary: #f5f7fa;
-    --bg-secondary: #e8ecf1;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
     --bg-card: #ffffff;
     --bg-input: #ffffff;
-    --bg-hover: #e0e4e8;
+    --bg-hover: #f0f0f0;
     --text-primary: #1a1a2e;
     --text-secondary: #333333;
     --text-muted: #666666;
@@ -47,7 +47,7 @@ html, body {
 
 html[data-theme="light"], 
 html[data-theme="light"] body {
-    background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
     color: #333333;
 }
 

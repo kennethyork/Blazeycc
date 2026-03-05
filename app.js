@@ -169,8 +169,9 @@ async function init() {
         if (e.target.checked && state.websiteLoaded) {
             startAutoScroll();
             showNotification('Auto-scroll started', 'info');
-        } else {
+        } else if (!e.target.checked) {
             stopAutoScroll();
+            showNotification('Auto-scroll stopped', 'info');
         }
     });
     
@@ -1245,12 +1246,19 @@ async function toggleTheme() {
 function startAutoScroll() {
     if (!state.autoScrollEnabled || !state.websiteLoaded) return;
     
+    // Clear any existing interval first
+    stopAutoScroll();
+    
     console.log('Auto-scroll started');
     
     // Get scroll speed from settings (default: 2)
     const scrollSpeed = parseInt(document.getElementById('scrollSpeed')?.value) || 2;
     
     state.autoScrollInterval = setInterval(() => {
+        if (!state.autoScrollEnabled) {
+            stopAutoScroll();
+            return;
+        }
         elements.webview.executeJavaScript(`
             (function() {
                 const scrollStep = ${scrollSpeed};
@@ -1274,9 +1282,16 @@ function startAutoScroll() {
             if (isAtBottom) {
                 console.log('Auto-scroll reached bottom');
                 stopAutoScroll();
+                // Uncheck toggle and update state
+                state.autoScrollEnabled = false;
+                if (elements.autoScrollToggle) {
+                    elements.autoScrollToggle.checked = false;
+                }
+                showNotification('Auto-scroll finished', 'info');
             }
         }).catch(err => {
             console.error('Auto-scroll error:', err);
+            stopAutoScroll();
         });
     }, 50);
 }
@@ -1285,6 +1300,13 @@ function stopAutoScroll() {
     if (state.autoScrollInterval) {
         clearInterval(state.autoScrollInterval);
         state.autoScrollInterval = null;
+        console.log('Auto-scroll stopped');
+    }
+    // Also stop any momentum scrolling in the webview
+    if (elements.webview) {
+        elements.webview.executeJavaScript(`
+            window.scrollTo(window.pageXOffset, window.pageYOffset);
+        `).catch(() => {});
     }
 }
 

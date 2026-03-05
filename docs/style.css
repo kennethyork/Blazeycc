@@ -380,6 +380,17 @@ nav {
     margin-bottom: 3rem;
 }
 
+.version-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+}
+
 .download-cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

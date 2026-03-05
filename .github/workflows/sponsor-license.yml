@@ -5,7 +5,7 @@ on:
   sponsorship:
     types: [created]
   
-  # Manual backup
+  # Manual trigger for testing
   workflow_dispatch:
     inputs:
       sponsor_email:
@@ -19,6 +19,9 @@ jobs:
   generate-key:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        
       - name: Get Sponsor Info
         id: sponsor
         run: |

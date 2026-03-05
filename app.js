@@ -846,6 +846,12 @@ async function loadTheme() {
 
 function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+    document.body.style.background = '';
+    document.body.style.color = '';
+    if (theme === 'light') {
+        document.body.style.background = 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)';
+        document.body.style.color = '#333333';
+    }
     elements.themeToggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
 }
 

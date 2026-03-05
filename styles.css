@@ -113,7 +113,7 @@ html[data-theme="light"] body {
 
 .bookmarks-label {
     font-size: 0.85rem;
-    color: #888;
+    color: var(--text-muted);
     white-space: nowrap;
 }
 
@@ -150,7 +150,7 @@ html[data-theme="light"] body {
 .bookmark-remove {
     background: none;
     border: none;
-    color: #666;
+    color: var(--text-muted);
     cursor: pointer;
     padding: 0 0.25rem;
     font-size: 1rem;
@@ -165,7 +165,7 @@ html[data-theme="light"] body {
 }
 
 .no-bookmarks {
-    color: #666;
+    color: var(--text-muted);
     font-size: 0.85rem;
     font-style: italic;
 }
@@ -265,7 +265,7 @@ html[data-theme="light"] body {
 .record-dot {
     width: 12px;
     height: 12px;
-    background: #fff;
+    background: var(--bg-card);
     border-radius: 50%;
     display: inline-block;
 }
@@ -300,7 +300,7 @@ html[data-theme="light"] body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #888;
+    color: var(--text-muted);
     font-size: 0.9rem;
 }
 
@@ -339,7 +339,7 @@ html[data-theme="light"] body {
 
 .setting-group label {
     font-size: 0.85rem;
-    color: #888;
+    color: var(--text-muted);
     font-weight: 500;
 }
 
@@ -383,7 +383,7 @@ html[data-theme="light"] body {
 }
 
 .resolution-inputs span {
-    color: #666;
+    color: var(--text-muted);
 }
 
 .settings-info {
@@ -440,7 +440,7 @@ html[data-theme="light"] body {
 
 .source-item .name {
     font-size: 0.8rem;
-    color: #ccc;
+    color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -488,13 +488,13 @@ html[data-theme="light"] body {
 }
 
 .browser-toolbar .btn-small:hover {
-    background: var(--bg-primary);
+    background: var(--bg-hover);
 }
 
 .current-url {
     flex: 1;
     font-size: 0.85rem;
-    color: #888;
+    color: var(--text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -511,7 +511,7 @@ html[data-theme="light"] body {
 
 .placeholder {
     text-align: center;
-    color: #666;
+    color: var(--text-muted);
     padding: 2rem;
 }
 
@@ -521,7 +521,7 @@ html[data-theme="light"] body {
 }
 
 .placeholder .subtitle-text {
-    color: #888;
+    color: var(--text-muted);
     font-size: 0.9rem;
     margin-top: 0.5rem;
     line-height: 1.6;
@@ -740,7 +740,7 @@ html[data-theme="light"] body {
 }
 
 .setting-item label {
-    color: #888;
+    color: var(--text-muted);
     font-size: 0.9rem;
 }
 

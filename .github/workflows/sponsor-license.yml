@@ -1,4 +1,4 @@
-name: Auto-Generate Sponsor License Key
+name: Deliver Sponsor License Key
 
 on:
   # Triggered by Cloudflare Worker webhook
@@ -8,16 +8,18 @@ on:
   # Manual trigger for testing
   workflow_dispatch:
     inputs:
-      sponsor_email:
-        description: "Sponsor email address"
-        required: true
       sponsor_login:
         description: "Sponsor GitHub username"
         required: true
+      sponsor_email:
+        description: "Sponsor email address"
+        required: true
 
 jobs:
-  generate-key:
+  deliver-license:
     runs-on: ubuntu-latest
+    env:
+      LICENSE_SECRET: ${{ secrets.LICENSE_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +30,7 @@ jobs:
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             SPONSOR_LOGIN="${{ github.event.client_payload.sponsor_login }}"
             SPONSOR_EMAIL="${{ github.event.client_payload.sponsor_email }}"
+            LICENSE_KEY="${{ github.event.client_payload.license_key }}"
             TIER="${{ github.event.client_payload.tier_name }}"
             AMOUNT="${{ github.event.client_payload.amount }}"
           else
@@ -35,70 +38,75 @@ jobs:
             SPONSOR_EMAIL="${{ github.event.inputs.sponsor_email }}"
             TIER="Manual"
             AMOUNT="7"
+            # Generate license key for manual trigger
+            SECRET="${LICENSE_SECRET}"
+            SECRET=${SECRET:-'blazeycc-pro-2026-change-this-secret'}
+            HASH=$(echo -n "$SPONSOR_EMAIL" | openssl dgst -sha256 -hmac "$SECRET" | cut -d" " -f2)
+            LICENSE_KEY=$(echo "${HASH:0:16}" | tr "[:lower:]" "[:upper:]" | sed "s/\(....\)/\1-/g" | sed "s/-$//")
           fi
           
           echo "login=$SPONSOR_LOGIN" >> $GITHUB_OUTPUT
           echo "email=$SPONSOR_EMAIL" >> $GITHUB_OUTPUT
+          echo "key=$LICENSE_KEY" >> $GITHUB_OUTPUT
           echo "tier=$TIER" >> $GITHUB_OUTPUT
           echo "amount=$AMOUNT" >> $GITHUB_OUTPUT
       
-      - name: Generate License Key
-        id: generate
-        env:
-          LICENSE_SECRET: ${{ secrets.LICENSE_SECRET }}
-        run: |
-          SPONSOR_EMAIL="${{ steps.sponsor.outputs.email }}"
-          SECRET="${LICENSE_SECRET:-blazeycc-pro-2026-change-this-secret}"
-          
-          HASH=$(echo -n "$SPONSOR_EMAIL" | openssl dgst -sha256 -hmac "$SECRET" | cut -d" " -f2)
-          LICENSE_KEY=$(echo "${HASH:0:16}" | tr "[:lower:]" "[:upper:]" | sed "s/\(....\)/\1-/g" | sed "s/-$//")
-          
-          echo "key=$LICENSE_KEY" >> $GITHUB_OUTPUT
-      
-      - name: Create Issue with License (Auto Notification)
-        if: github.event_name == 'repository_dispatch'
+      - name: Create Issue with License Key for Sponsor
         uses: actions/github-script@v7
         with:
           script: |
             const login = '${{ steps.sponsor.outputs.login }}';
             const email = '${{ steps.sponsor.outputs.email }}';
-            const key = '${{ steps.generate.outputs.key }}';
+            const key = '${{ steps.sponsor.outputs.key }}';
             const tier = '${{ steps.sponsor.outputs.tier }}';
             const amount = '${{ steps.sponsor.outputs.amount }}';
             
-            // Create a private issue for the repo owner to see
+            // Create an issue that @mentions the sponsor so they get notified
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `🎉 New Sponsor: ${login} - Send License Key`,
-              body: `## New Blazeycc Pro Sponsor!\n\n` +
-                    `**Sponsor:** @${login}\n` +
-                    `**Email:** ${email}\n` +
-                    `**Tier:** ${tier} ($${amount}/month)\n\n` +
-                    `---\n\n` +
-                    `### License Key\n\n` +
+              title: `🎉 @${login} - Your Blazeycc Pro License Key`,
+              body: `## Thank you for sponsoring Blazeycc! 💜\n\n` +
+                    `Hey @${login}, welcome to **${tier}**!\n\n` +
+                    `Here is your Blazeycc Pro license key:\n\n` +
+                    `### Your License Key\n\n` +
                     `\`\`\`\n${key}\n\`\`\`\n\n` +
+                    `### Your Email (for activation)\n\n` +
+                    `\`\`\`\n${email}\n\`\`\`\n\n` +
                     `---\n\n` +
-                    `**Action:** Send this key to the sponsor via email!\n\n` +
-                    `After sending, close this issue.`,
-              labels: ['sponsor', 'license-key']
+                    `### How to Activate\n\n` +
+                    `1. Open Blazeycc\n` +
+                    `2. Click the ⚙️ Settings button\n` +
+                    `3. Scroll down to "Premium Features"\n` +
+                    `4. Enter your email: \`${email}\`\n` +
+                    `5. Enter your license key: \`${key}\`\n` +
+                    `6. Click "🔑 Activate License"\n\n` +
+                    `### Your Pro Features\n\n` +
+                    `- ✅ No watermark on videos\n` +
+                    `- ✅ 4K export support\n` +
+                    `- ✅ Batch URL recording\n` +
+                    `- ✅ Scheduled recordings\n\n` +
+                    `---\n\n` +
+                    `> **Note:** You can close this issue after saving your license key.\n\n` +
+                    `If you have any questions, feel free to comment here or open a new issue!\n\n` +
+                    `Thank you for your support! 🚀`,
+              labels: ['sponsor', 'license-key'],
+              assignees: [login]
             });
+            
+            console.log(`✅ License key issue created for @${login}`);
       
-      - name: Display License Key
+      - name: Summary
         run: |
           echo ""
           echo "============================================"
-          echo "   NEW SPONSOR - LICENSE KEY GENERATED"
+          echo "   LICENSE KEY DELIVERED VIA GITHUB ISSUE"
           echo "============================================"
           echo ""
-          echo "  Sponsor:  ${{ steps.sponsor.outputs.login }}"
-          echo "  Email:    ${{ steps.sponsor.outputs.email }}"
+          echo "  Sponsor:  @${{ steps.sponsor.outputs.login }}"
           echo "  Tier:     ${{ steps.sponsor.outputs.tier }}"
-          echo "  Amount:   \$${{ steps.sponsor.outputs.amount }}/month"
           echo ""
-          echo "  LICENSE KEY:"
-          echo "  ${{ steps.generate.outputs.key }}"
+          echo "  The sponsor has been @mentioned in an issue"
+          echo "  and will receive a GitHub notification."
           echo ""
-          echo "============================================"
-          echo "  Check Issues for notification!"
           echo "============================================"

@@ -1,27 +1,38 @@
 # GitHub Sponsors → License Automation
 
-This webhook relay automatically sends license keys to GitHub Sponsors.
+This webhook relay automatically delivers license keys to GitHub Sponsors via GitHub Issues.
 
 ## How It Works
 
+```text
+Sponsor on GitHub → GitHub webhook → Cloudflare Worker → GitHub Actions → Issue with license key
+                                                                               ↓
+                                                        Sponsor gets @mentioned & notified
 ```
-Sponsor on GitHub → GitHub sends webhook → Cloudflare Worker → Email with license key
-```
+
+**No email required!** Sponsors receive their license key directly on GitHub.
 
 ## Setup Steps
 
-### 1. Deploy the Cloudflare Worker
+### 1. Create a GitHub Personal Access Token
+
+1. Go to github.com → Settings → Developer settings → Personal access tokens
+2. Create a fine-grained token with:
+   - Repository access: `blazeycc/Blazeycc`
+   - Permissions: Issues (Read and Write), Contents (Read)
+3. Copy the token
+
+### 2. Deploy the Cloudflare Worker
 
 1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) (free account)
 2. Click **Workers & Pages** → **Create Worker**
 3. Paste the code from `cloudflare-worker.js`
 4. Click **Settings** → **Variables** → Add:
    - `LICENSE_SECRET`: Your license key secret (same as generate-key.js)
-   - `SENDGRID_API_KEY`: (optional) SendGrid API key for auto-emails
-   - `FROM_EMAIL`: (optional) Your sender email address
+   - `GITHUB_TOKEN`: The PAT from step 1
 5. Deploy and copy your worker URL (e.g., `https://your-worker.workers.dev`)
 
-### 2. Configure GitHub Sponsors Webhook
+### 3. Configure GitHub Sponsors Webhook
 
 1. Go to [github.com/sponsors/blazeycc/dashboard](https://github.com/sponsors/blazeycc/dashboard)
 2. Click **Webhooks** tab
@@ -31,58 +42,36 @@ Sponsor on GitHub → GitHub sends webhook → Cloudflare Worker → Email with 
 6. Select event: **Sponsorship** → **created**
 7. Save
 
-### 3. Set Up Email (Optional)
-
-For automatic email delivery:
-
-1. Sign up at [sendgrid.com](https://sendgrid.com)
-2. Verify your sender email/domain
-3. Get your API key
-4. Add `SENDGRID_API_KEY` to your Cloudflare Worker variables
-
-If not configured, licenses will be logged and available via GitHub Actions workflow.
-
 ### 4. Create Sponsor Tiers
 
 1. Go to [github.com/sponsors/blazeycc/dashboard](https://github.com/sponsors/blazeycc/dashboard)
 2. Create tier(s):
-   - **Blazeycc Pro** ($7/month):
-     ```
-     🎉 Blazeycc Pro License
-     
-     ✅ No watermark on videos
-     ✅ 4K export support
-     ✅ Batch URL recording
-     ✅ Scheduled recordings
-     
-     Your license key will be emailed automatically!
-     ```
+   - **Blazeycc Pro** ($7/month): Include features and note that license key will be delivered via GitHub notification
 
 ### 5. Test the Setup
 
 1. Use GitHub's webhook test feature in the dashboard
 2. Or sponsor yourself with a test tier
-3. Check Cloudflare Worker logs for the license key
+3. Check that an issue was created with the license key
 
-## Alternative: GitHub Actions Only
+## What Sponsors See
 
-If you prefer not to use Cloudflare Workers, the repo includes a GitHub Actions workflow (`.github/workflows/sponsor-license.yml`) that:
+When someone becomes a sponsor, they receive a GitHub notification and see an issue with their license key, activation instructions, and a list of Pro features.
 
-1. Triggers on new sponsorships
-2. Generates a license key
-3. Creates an issue with the key for you to send manually
+## Manual Delivery
+
+To manually deliver a license key:
+
+```bash
+gh workflow run sponsor-license.yml \
+  -f sponsor_login=username \
+  -f sponsor_email=user@example.com
+```
 
 ## Environment Variables Reference
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `LICENSE_SECRET` | Yes | Secret for HMAC license generation |
-| `SENDGRID_API_KEY` | No | SendGrid API key for auto-emails |
-| `FROM_EMAIL` | No | Sender email (default: noreply@blazey.cc) |
-| `WEBHOOK_SECRET` | No | GitHub webhook secret for verification |
-
-## Troubleshooting
-
-- **No email received**: Check SendGrid API key and sender verification
-- **Worker not receiving events**: Verify webhook URL and event selection
-- **Invalid license**: Ensure LICENSE_SECRET matches between worker and app
+| Variable         | Required | Description                        |
+| ---------------- | -------- | ---------------------------------- |
+| `LICENSE_SECRET` | Yes      | Secret for HMAC license generation |
+| `GITHUB_TOKEN`   | Yes      | GitHub PAT for triggering workflows|
+| `WEBHOOK_SECRET` | Optional | Secret for webhook verification    |

@@ -1025,6 +1025,136 @@ html[data-theme="light"] body {
     gap: 1rem;
 }
 
+/* Cloud Preview Modal (Pro+) */
+.cloud-preview-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2002;
+}
+
+.cloud-preview-content {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 1.5rem;
+    width: 90%;
+    max-width: 1000px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.cloud-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.cloud-preview-header h3 {
+    color: var(--text-primary);
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80%;
+}
+
+.cloud-preview-video-container {
+    flex: 1;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.cloud-preview-video-container video {
+    width: 100%;
+    max-height: 70vh;
+}
+
+/* Share button styles */
+.btn-share-cloud {
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+}
+
+.btn-share-cloud.shared {
+    background: linear-gradient(135deg, #27ae60, #2ecc71);
+    border-color: #27ae60;
+    color: white;
+}
+
+.btn-preview-cloud {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    color: white;
+}
+
+.btn-preview-cloud:hover {
+    background: linear-gradient(135deg, #764ba2, #667eea);
+}
+
+/* Export Dropdown */
+.export-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.btn-export-cloud {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    border: none;
+    color: white;
+}
+
+.btn-export-cloud:hover {
+    background: linear-gradient(135deg, #c0392b, #e74c3c);
+}
+
+.export-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem 0;
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.export-option {
+    background: none;
+    border: none;
+    padding: 0.6rem 1rem;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.export-option:hover {
+    background: var(--bg-hover);
+}
+
+.export-icon {
+    font-size: 1.1rem;
+}
+
 /* Progress Modal */
 .progress-modal {
     position: fixed;

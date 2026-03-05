@@ -66,12 +66,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setCloudConfig: (config) => ipcRenderer.invoke('set-cloud-config', config),
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
     
-    // Cloud Storage (Pro) - R2-based storage
+    // Cloud Storage (Pro+) - R2-based storage
     cloudStorageUpload: (filePath) => ipcRenderer.invoke('cloud-storage-upload', filePath),
     cloudStorageList: () => ipcRenderer.invoke('cloud-storage-list'),
     cloudStorageDownload: (key, filename) => ipcRenderer.invoke('cloud-storage-download', key, filename),
     cloudStorageDelete: (key) => ipcRenderer.invoke('cloud-storage-delete', key),
     cloudStorageUsage: () => ipcRenderer.invoke('cloud-storage-usage'),
+    // Shareable links
+    cloudStorageShare: (key, expiresIn) => ipcRenderer.invoke('cloud-storage-share', { key, expiresIn }),
+    cloudStorageUnshare: (key) => ipcRenderer.invoke('cloud-storage-unshare', key),
+    // Preview URL
+    cloudStoragePreviewUrl: (key) => ipcRenderer.invoke('cloud-storage-preview-url', key),
+    // Copy to clipboard
+    copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
     
     // Canvas-based recording (alternative to MediaRecorder)
     startCanvasRecording: () => ipcRenderer.invoke('start-canvas-recording'),

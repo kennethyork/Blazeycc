@@ -80,6 +80,24 @@ export default {
             if (path === '/storage/usage' && request.method === 'GET') {
                 return handleStorageUsage(request, env, corsHeaders);
             }
+            
+            // Generate share link for video
+            if (path === '/storage/share' && request.method === 'POST') {
+                return handleStorageShare(request, env, corsHeaders);
+            }
+            // Revoke share link
+            if (path === '/storage/unshare' && request.method === 'POST') {
+                return handleStorageUnshare(request, env, corsHeaders);
+            }
+            // Public access to shared video (no auth required)
+            if (path.startsWith('/share/') && request.method === 'GET') {
+                const shareToken = path.replace('/share/', '');
+                return handlePublicShare(shareToken, request, env, corsHeaders);
+            }
+            // Stream/preview video (for cloud preview)
+            if (path === '/storage/preview' && request.method === 'GET') {
+                return handleStoragePreview(request, env, corsHeaders);
+            }
 
             // =====================
             // ADMIN ENDPOINTS
@@ -843,14 +861,15 @@ async function handleStorageList(request, env, corsHeaders) {
         return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
     }
     
-    // Get list from database
+    // Get list from database (including share info)
     const result = await env.DB.prepare(`
-        SELECT id, r2_key, filename, file_size, content_type, uploaded_at
+        SELECT id, r2_key, filename, file_size, content_type, uploaded_at, share_token, share_expires_at
         FROM cloud_storage 
         WHERE email = ? 
         ORDER BY uploaded_at DESC
     `).bind(normalizedEmail).all();
     
+    const baseUrl = new URL(request.url).origin;
     const limitBytes = parseInt(env.STORAGE_LIMIT_MB || '5120') * 1024 * 1024;
     const usage = await calculateStorageUsage(env, normalizedEmail);
     
@@ -862,7 +881,10 @@ async function handleStorageList(request, env, corsHeaders) {
             filename: f.filename,
             size: f.file_size,
             contentType: f.content_type,
-            uploadedAt: f.uploaded_at
+            uploadedAt: f.uploaded_at,
+            shareToken: f.share_token || null,
+            shareUrl: f.share_token ? `${baseUrl}/share/${f.share_token}` : null,
+            shareExpiresAt: f.share_expires_at || null
         })),
         usage: {
             used: usage,
@@ -986,4 +1008,252 @@ async function calculateStorageUsage(env, email) {
     ).bind(email).first();
     
     return result?.total || 0;
+}
+
+// =====================
+// SHAREABLE LINKS HANDLERS
+// =====================
+
+async function handleStorageShare(request, env, corsHeaders) {
+    const r2Check = checkR2Available(env, corsHeaders);
+    if (r2Check) return r2Check;
+    
+    const { email, licenseKey, key, expiresIn } = await request.json();
+    
+    if (!email || !key) {
+        return jsonResponse({ error: 'Email and key required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    // Verify the key belongs to this user
+    if (!key.startsWith(normalizedEmail + '/')) {
+        return jsonResponse({ error: 'Access denied' }, 403, corsHeaders);
+    }
+    
+    // Check if file exists in database
+    const file = await env.DB.prepare(
+        'SELECT id, filename, share_token FROM cloud_storage WHERE r2_key = ? AND email = ?'
+    ).bind(key, normalizedEmail).first();
+    
+    if (!file) {
+        return jsonResponse({ error: 'File not found' }, 404, corsHeaders);
+    }
+    
+    // If already has a share token, return it
+    if (file.share_token) {
+        const baseUrl = new URL(request.url).origin;
+        return jsonResponse({
+            success: true,
+            shareToken: file.share_token,
+            shareUrl: `${baseUrl}/share/${file.share_token}`,
+            filename: file.filename,
+            alreadyShared: true
+        }, 200, corsHeaders);
+    }
+    
+    // Generate a new share token
+    const shareToken = generateShareToken();
+    
+    // Calculate expiry (default 7 days, max 30 days)
+    const expiryDays = Math.min(expiresIn || 7, 30);
+    const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString();
+    
+    // Update database with share token
+    await env.DB.prepare(
+        'UPDATE cloud_storage SET share_token = ?, share_expires_at = ? WHERE id = ?'
+    ).bind(shareToken, expiresAt, file.id).run();
+    
+    const baseUrl = new URL(request.url).origin;
+    
+    await logAnalytics(env.DB, 'storage_share_created', normalizedEmail, licenseKey, request, { key, shareToken });
+    
+    return jsonResponse({
+        success: true,
+        shareToken,
+        shareUrl: `${baseUrl}/share/${shareToken}`,
+        expiresAt,
+        filename: file.filename
+    }, 200, corsHeaders);
+}
+
+async function handleStorageUnshare(request, env, corsHeaders) {
+    const { email, licenseKey, key } = await request.json();
+    
+    if (!email || !key) {
+        return jsonResponse({ error: 'Email and key required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    // Verify the key belongs to this user
+    if (!key.startsWith(normalizedEmail + '/')) {
+        return jsonResponse({ error: 'Access denied' }, 403, corsHeaders);
+    }
+    
+    // Remove share token from database
+    await env.DB.prepare(
+        'UPDATE cloud_storage SET share_token = NULL, share_expires_at = NULL WHERE r2_key = ? AND email = ?'
+    ).bind(key, normalizedEmail).run();
+    
+    await logAnalytics(env.DB, 'storage_share_revoked', normalizedEmail, licenseKey, request, { key });
+    
+    return jsonResponse({ success: true, unshared: key }, 200, corsHeaders);
+}
+
+async function handlePublicShare(shareToken, request, env, corsHeaders) {
+    const r2Check = checkR2Available(env, corsHeaders);
+    if (r2Check) return r2Check;
+    
+    if (!shareToken || shareToken.length < 10) {
+        return jsonResponse({ error: 'Invalid share link' }, 400, corsHeaders);
+    }
+    
+    // Look up the file by share token
+    const file = await env.DB.prepare(
+        'SELECT r2_key, filename, content_type, share_expires_at FROM cloud_storage WHERE share_token = ?'
+    ).bind(shareToken).first();
+    
+    if (!file) {
+        return jsonResponse({ error: 'Share link not found or expired' }, 404, corsHeaders);
+    }
+    
+    // Check if share has expired
+    if (file.share_expires_at && new Date(file.share_expires_at) < new Date()) {
+        return jsonResponse({ error: 'Share link has expired' }, 410, corsHeaders);
+    }
+    
+    // Get from R2
+    const object = await env.STORAGE.get(file.r2_key);
+    
+    if (!object) {
+        return jsonResponse({ error: 'File not found' }, 404, corsHeaders);
+    }
+    
+    const url = new URL(request.url);
+    const download = url.searchParams.get('download') === '1';
+    
+    const headers = new Headers(corsHeaders);
+    headers.set('Content-Type', file.content_type || 'video/mp4');
+    headers.set('Content-Length', object.size);
+    headers.set('Accept-Ranges', 'bytes');
+    
+    if (download) {
+        headers.set('Content-Disposition', `attachment; filename="${file.filename}"`);
+    } else {
+        headers.set('Content-Disposition', `inline; filename="${file.filename}"`);
+    }
+    
+    // Handle range requests for video streaming
+    const range = request.headers.get('Range');
+    if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : object.size - 1;
+        const chunkSize = (end - start) + 1;
+        
+        headers.set('Content-Range', `bytes ${start}-${end}/${object.size}`);
+        headers.set('Content-Length', chunkSize);
+        
+        // Slice the body for partial content
+        const body = await object.arrayBuffer();
+        const slice = body.slice(start, end + 1);
+        
+        return new Response(slice, { status: 206, headers });
+    }
+    
+    return new Response(object.body, { headers });
+}
+
+async function handleStoragePreview(request, env, corsHeaders) {
+    const r2Check = checkR2Available(env, corsHeaders);
+    if (r2Check) return r2Check;
+    
+    const url = new URL(request.url);
+    const email = url.searchParams.get('email');
+    const licenseKey = url.searchParams.get('licenseKey');
+    const key = url.searchParams.get('key');
+    
+    if (!email || !key) {
+        return jsonResponse({ error: 'Email and key required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Verify license is valid
+    const licenseValid = await verifyLicenseKey(env, normalizedEmail, licenseKey);
+    if (!licenseValid) {
+        return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
+    }
+    
+    // Verify the key belongs to this user
+    if (!key.startsWith(normalizedEmail + '/')) {
+        return jsonResponse({ error: 'Access denied' }, 403, corsHeaders);
+    }
+    
+    // Get file info from database
+    const file = await env.DB.prepare(
+        'SELECT filename, content_type FROM cloud_storage WHERE r2_key = ? AND email = ?'
+    ).bind(key, normalizedEmail).first();
+    
+    if (!file) {
+        return jsonResponse({ error: 'File not found' }, 404, corsHeaders);
+    }
+    
+    // Get from R2
+    const object = await env.STORAGE.get(key);
+    
+    if (!object) {
+        return jsonResponse({ error: 'File not found in storage' }, 404, corsHeaders);
+    }
+    
+    const headers = new Headers(corsHeaders);
+    headers.set('Content-Type', file.content_type || 'video/mp4');
+    headers.set('Content-Length', object.size);
+    headers.set('Accept-Ranges', 'bytes');
+    headers.set('Content-Disposition', `inline; filename="${file.filename}"`);
+    
+    // Handle range requests for video streaming/seeking
+    const range = request.headers.get('Range');
+    if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : object.size - 1;
+        const chunkSize = (end - start) + 1;
+        
+        headers.set('Content-Range', `bytes ${start}-${end}/${object.size}`);
+        headers.set('Content-Length', chunkSize);
+        
+        // Slice the body for partial content
+        const body = await object.arrayBuffer();
+        const slice = body.slice(start, end + 1);
+        
+        return new Response(slice, { status: 206, headers });
+    }
+    
+    return new Response(object.body, { headers });
+}
+
+function generateShareToken() {
+    // Generate a URL-safe random token
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let token = '';
+    const randomValues = new Uint8Array(16);
+    crypto.getRandomValues(randomValues);
+    for (let i = 0; i < 16; i++) {
+        token += chars[randomValues[i] % chars.length];
+    }
+    return token;
 }

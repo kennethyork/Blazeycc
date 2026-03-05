@@ -241,13 +241,19 @@ async function init() {
     elements.closeHistoryBtn.addEventListener('click', () => elements.historyPanel.style.display = 'none');
     elements.clearHistoryBtn.addEventListener('click', clearHistory);
     
-    // Cloud library panel (Pro)
+    // Cloud library panel (Pro+)
     elements.cloudLibraryBtn.addEventListener('click', toggleCloudLibraryPanel);
     elements.closeCloudLibraryBtn?.addEventListener('click', () => elements.cloudLibraryPanel.style.display = 'none');
     elements.refreshCloudBtn?.addEventListener('click', loadCloudLibrary);
     elements.openCloudLibraryFromSettings?.addEventListener('click', () => {
         elements.settingsPanel.style.display = 'none';
         toggleCloudLibraryPanel();
+    });
+    
+    // Cloud preview modal
+    document.getElementById('closeCloudPreviewBtn')?.addEventListener('click', closeCloudPreview);
+    document.getElementById('cloudPreviewModal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'cloudPreviewModal') closeCloudPreview();
     });
     
     // Settings panel
@@ -857,17 +863,96 @@ async function loadCloudLibrary() {
         
         const sizeStr = formatFileSize(file.size);
         const dateStr = new Date(file.uploadedAt).toLocaleDateString();
+        const isShared = !!file.shareToken;
         
         item.innerHTML = `
             <div class="cloud-file-info">
                 <span class="cloud-file-name">${escapeHtml(file.filename)}</span>
-                <span class="cloud-file-meta">${sizeStr} • ${dateStr}</span>
+                <span class="cloud-file-meta">${sizeStr} • ${dateStr}${isShared ? ' • 🔗 Shared' : ''}</span>
             </div>
             <div class="cloud-file-actions">
+                <button class="btn btn-small btn-preview-cloud" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}" data-type="${escapeHtml(file.contentType || 'video/mp4')}" title="Preview">▶️</button>
+                <button class="btn btn-small btn-share-cloud ${isShared ? 'shared' : ''}" data-key="${escapeHtml(file.key)}" data-share-url="${isShared ? escapeHtml(file.shareUrl) : ''}" title="${isShared ? 'Copy Link / Unshare' : 'Share'}">🔗</button>
+                <div class="export-dropdown">
+                    <button class="btn btn-small btn-export-cloud" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}" title="Export to YouTube/Vimeo">📤</button>
+                    <div class="export-dropdown-menu" style="display: none;">
+                        <button class="export-option" data-platform="youtube" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}">
+                            <span class="export-icon">🎬</span> YouTube
+                        </button>
+                        <button class="export-option" data-platform="vimeo" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}">
+                            <span class="export-icon">🎥</span> Vimeo
+                        </button>
+                    </div>
+                </div>
                 <button class="btn btn-small btn-download-cloud" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}" title="Download">⬇️</button>
                 <button class="btn btn-small btn-danger btn-delete-cloud" data-key="${escapeHtml(file.key)}" title="Delete">🗑️</button>
             </div>
         `;
+        
+        // Preview handler
+        item.querySelector('.btn-preview-cloud').addEventListener('click', async (e) => {
+            const key = e.target.dataset.key;
+            const filename = e.target.dataset.filename;
+            const contentType = e.target.dataset.type;
+            await showCloudPreview(key, filename, contentType);
+        });
+        
+        // Export dropdown toggle
+        const exportBtn = item.querySelector('.btn-export-cloud');
+        const exportMenu = item.querySelector('.export-dropdown-menu');
+        exportBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Close other dropdowns
+            document.querySelectorAll('.export-dropdown-menu').forEach(m => {
+                if (m !== exportMenu) m.style.display = 'none';
+            });
+            exportMenu.style.display = exportMenu.style.display === 'none' ? 'flex' : 'none';
+        });
+        
+        // Export option handlers
+        item.querySelectorAll('.export-option').forEach(opt => {
+            opt.addEventListener('click', async (e) => {
+                const platform = e.currentTarget.dataset.platform;
+                const key = e.currentTarget.dataset.key;
+                const filename = e.currentTarget.dataset.filename;
+                exportMenu.style.display = 'none';
+                await exportToSocialPlatform(platform, key, filename);
+            });
+        });
+        
+        // Share handler
+        item.querySelector('.btn-share-cloud').addEventListener('click', async (e) => {
+            const key = e.target.dataset.key;
+            const existingShareUrl = e.target.dataset.shareUrl;
+            
+            if (existingShareUrl) {
+                // Already shared - show options
+                const action = await showShareOptions(existingShareUrl);
+                if (action === 'copy') {
+                    await window.electronAPI.copyToClipboard(existingShareUrl);
+                    showNotification('Link copied to clipboard!', 'success');
+                } else if (action === 'unshare') {
+                    const unshareResult = await window.electronAPI.cloudStorageUnshare(key);
+                    if (unshareResult.success) {
+                        showNotification('Share link revoked', 'success');
+                        await loadCloudLibrary();
+                    } else {
+                        showNotification(unshareResult.error || 'Failed to unshare', 'error');
+                    }
+                }
+            } else {
+                // Create share link
+                showNotification('Creating share link...', 'info');
+                const shareResult = await window.electronAPI.cloudStorageShare(key, 7);
+                if (shareResult.success) {
+                    await window.electronAPI.copyToClipboard(shareResult.shareUrl);
+                    showNotification('Share link copied to clipboard!', 'success');
+                    await loadCloudLibrary();
+                } else {
+                    showNotification(shareResult.error || 'Failed to create share link', 'error');
+                }
+            }
+        });
         
         // Download handler
         item.querySelector('.btn-download-cloud').addEventListener('click', async (e) => {
@@ -899,6 +984,80 @@ async function loadCloudLibrary() {
         elements.cloudFilesList.appendChild(item);
     });
 }
+
+// Cloud preview modal
+async function showCloudPreview(key, filename, contentType) {
+    const urlResult = await window.electronAPI.cloudStoragePreviewUrl(key);
+    if (!urlResult.success) {
+        showNotification(urlResult.error || 'Failed to get preview', 'error');
+        return;
+    }
+    
+    const modal = document.getElementById('cloudPreviewModal');
+    const video = document.getElementById('cloudPreviewVideo');
+    const title = document.getElementById('cloudPreviewTitle');
+    
+    title.textContent = filename;
+    video.src = urlResult.url;
+    video.type = contentType;
+    modal.style.display = 'flex';
+    video.play();
+}
+
+function closeCloudPreview() {
+    const modal = document.getElementById('cloudPreviewModal');
+    const video = document.getElementById('cloudPreviewVideo');
+    video.pause();
+    video.src = '';
+    modal.style.display = 'none';
+}
+
+// Share options dialog
+function showShareOptions(shareUrl) {
+    return new Promise((resolve) => {
+        const action = confirm(`Share link:\n${shareUrl}\n\nClick OK to copy link, or Cancel then use the menu to unshare.`);
+        if (action) {
+            resolve('copy');
+        } else {
+            const unshare = confirm('Do you want to revoke this share link?');
+            resolve(unshare ? 'unshare' : null);
+        }
+    });
+}
+
+// Export to YouTube/Vimeo
+async function exportToSocialPlatform(platform, key, filename) {
+    showNotification(`Preparing export to ${platform}...`, 'info');
+    
+    // First download the file locally
+    const downloadResult = await window.electronAPI.cloudStorageDownload(key, filename);
+    
+    if (!downloadResult.success) {
+        showNotification(downloadResult.error || 'Failed to download file', 'error');
+        return;
+    }
+    
+    showNotification(`File downloaded! Opening ${platform}...`, 'success');
+    
+    // Open the respective upload page
+    const uploadUrls = {
+        youtube: 'https://studio.youtube.com/channel/upload',
+        vimeo: 'https://vimeo.com/upload'
+    };
+    
+    const url = uploadUrls[platform];
+    if (url) {
+        await window.electronAPI.openExternal(url);
+        showNotification(`Upload your video at ${platform}. File saved to: ${downloadResult.path}`, 'info');
+    }
+}
+
+// Close export dropdowns when clicking outside
+document.addEventListener('click', () => {
+    document.querySelectorAll('.export-dropdown-menu').forEach(menu => {
+        menu.style.display = 'none';
+    });
+});
 
 function updateStorageDisplay(usage) {
     if (!usage) return;

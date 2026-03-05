@@ -667,6 +667,77 @@ ipcMain.handle('cloud-storage-usage', async () => {
     }
 });
 
+// Generate share link for cloud file
+ipcMain.handle('cloud-storage-share', async (event, { key, expiresIn }) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro+ license required' };
+    }
+    
+    try {
+        const response = await fetch(`${LICENSE_API_URL}/storage/share`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license.email,
+                licenseKey: license.key,
+                key,
+                expiresIn: expiresIn || 7 // Default 7 days
+            })
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud share failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Revoke share link for cloud file
+ipcMain.handle('cloud-storage-unshare', async (event, key) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro+ license required' };
+    }
+    
+    try {
+        const response = await fetch(`${LICENSE_API_URL}/storage/unshare`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license.email,
+                licenseKey: license.key,
+                key
+            })
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud unshare failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Get preview URL for cloud file
+ipcMain.handle('cloud-storage-preview-url', async (event, key) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro+ license required' };
+    }
+    
+    // Return the preview URL that can be used in a video element
+    const previewUrl = `${LICENSE_API_URL}/storage/preview?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&key=${encodeURIComponent(key)}`;
+    
+    return { success: true, url: previewUrl };
+});
+
+// Copy to clipboard
+ipcMain.handle('copy-to-clipboard', async (event, text) => {
+    const { clipboard } = require('electron');
+    clipboard.writeText(text);
+    return { success: true };
+});
+
 // Save path management
 ipcMain.handle('get-save-path', async () => {
     return store.get('savePath');

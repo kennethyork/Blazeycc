@@ -103,8 +103,11 @@ CREATE TABLE IF NOT EXISTS cloud_storage (
     filename TEXT NOT NULL,        -- Original filename
     file_size INTEGER NOT NULL,    -- In bytes
     content_type TEXT,             -- MIME type
+    share_token TEXT UNIQUE,       -- Shareable link token
+    share_expires_at DATETIME,     -- When share link expires
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_storage_email ON cloud_storage(email);
 CREATE INDEX IF NOT EXISTS idx_storage_key ON cloud_storage(r2_key);
+CREATE INDEX IF NOT EXISTS idx_storage_share_token ON cloud_storage(share_token);

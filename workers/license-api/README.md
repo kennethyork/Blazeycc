@@ -20,7 +20,7 @@ wrangler login
 
 ### 2. Create GitHub Personal Access Token
 
-1. Go to https://github.com/settings/tokens
+1. Go to <https://github.com/settings/tokens>
 2. Generate new token (classic)
 3. Select scopes: `read:user`, `read:org`
 4. Copy the token
@@ -32,7 +32,7 @@ cd workers/license-api
 
 # Set the license secret (same as in your app)
 wrangler secret put LICENSE_SECRET
-# Paste: 4f6fab93b5f0bfb47f3431ab19b230994e94cc946d479e27cf82b1b85c7aaee3
+# Paste your 32-byte hex secret
 
 # Set GitHub token
 wrangler secret put GITHUB_TOKEN
@@ -50,7 +50,7 @@ wrangler deploy
 Edit `docs/license.html` and set the `WORKER_URL`:
 
 ```javascript
-const WORKER_URL = 'https://blazeycc-license.your-subdomain.workers.dev';
+const WORKER_URL = 'https://blazeycc-license.kennethhy-me.workers.dev';
 ```
 
 Then push to GitHub:
@@ -62,7 +62,7 @@ git add -A && git commit -m "Enable secure license verification" && git push
 ## Testing
 
 ```bash
-curl -X POST https://blazeycc-license.your-subdomain.workers.dev \
+curl -X POST https://blazeycc-license.kennethhy-me.workers.dev \
   -H "Content-Type: application/json" \
   -d '{"email": "sponsor@example.com"}'
 ```

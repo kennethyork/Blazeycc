@@ -81,15 +81,6 @@ Your license is tied to your GitHub Sponsors email. As long as you're an active 
 - **Priority support**: Issues from sponsors are prioritized
 - **Feature requests**: Have a say in the roadmap
 
----
-
-## 📬 Questions?
-
-- Open an [issue](https://github.com/blazeycc/Blazeycc/issues) on GitHub
-- Email: blazeycc@example.com
-
----
-
-**Thank you for supporting open-source software! 💜**
+**Thank you for supporting Blazeycc! 💜**
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-💜-ea4aaa?style=for-the-badge)](https://github.com/sponsors/theKennethy)

@@ -5,6 +5,12 @@ compatibility_date = "2024-01-01"
 [vars]
 GITHUB_USERNAME = "theKennethy"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "blazeycc-licenses"
+database_id = "3112b81a-8a4d-410e-80db-623c2fe00087"
+
 # Secrets (set via wrangler secret put):
 # - LICENSE_SECRET: Your HMAC secret for generating keys
 # - GITHUB_TOKEN: GitHub personal access token with read:user and read:org scope
+# - ADMIN_KEY: Secret key for admin API endpoints

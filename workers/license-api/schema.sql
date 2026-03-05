@@ -8,3 +8,70 @@ CREATE TABLE IF NOT EXISTS allowed_emails (
 
 -- Index for fast email lookups
 CREATE INDEX IF NOT EXISTS idx_email ON allowed_emails(email);
+
+-- Revoked licenses - block specific keys
+CREATE TABLE IF NOT EXISTS revoked_licenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    license_key TEXT UNIQUE NOT NULL,
+    email TEXT,
+    reason TEXT,
+    revoked_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_revoked_key ON revoked_licenses(license_key);
+
+-- Usage tracking - count videos per user
+CREATE TABLE IF NOT EXISTS usage_tracking (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    license_key TEXT,
+    action TEXT NOT NULL,  -- 'video_created', 'export', etc.
+    metadata TEXT,         -- JSON for extra data (duration, resolution, etc.)
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_email ON usage_tracking(email);
+CREATE INDEX IF NOT EXISTS idx_usage_action ON usage_tracking(action);
+CREATE INDEX IF NOT EXISTS idx_usage_date ON usage_tracking(created_at);
+
+-- Promo codes
+CREATE TABLE IF NOT EXISTS promo_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,
+    discount_percent INTEGER DEFAULT 100,  -- 100 = free
+    max_uses INTEGER,                       -- NULL = unlimited
+    current_uses INTEGER DEFAULT 0,
+    valid_from DATETIME DEFAULT CURRENT_TIMESTAMP,
+    valid_until DATETIME,                   -- NULL = no expiry
+    note TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_promo_code ON promo_codes(code);
+
+-- Promo code redemptions
+CREATE TABLE IF NOT EXISTS promo_redemptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    promo_code_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    redeemed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (promo_code_id) REFERENCES promo_codes(id),
+    UNIQUE(promo_code_id, email)  -- One redemption per email per code
+);
+
+-- Analytics events
+CREATE TABLE IF NOT EXISTS analytics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,  -- 'download', 'error', 'license_check', 'app_start', etc.
+    email TEXT,
+    license_key TEXT,
+    platform TEXT,             -- 'linux', 'windows', 'mac'
+    app_version TEXT,
+    metadata TEXT,             -- JSON for extra data
+    ip_country TEXT,           -- From CF headers if available
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics(event_type);
+CREATE INDEX IF NOT EXISTS idx_analytics_date ON analytics(created_at);
+CREATE INDEX IF NOT EXISTS idx_analytics_email ON analytics(email);

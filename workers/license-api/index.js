@@ -69,12 +69,6 @@ export default {
 async function verifySponsor(email, githubToken, githubUsername) {
     const normalizedEmail = email.toLowerCase().trim();
     
-    // Admin bypass - always allow these emails
-    const adminEmails = ['pro@blazeycc.com', 'kennethhy.me@gmail.com'];
-    if (adminEmails.includes(normalizedEmail)) {
-        return true;
-    }
-    
     // Query GitHub GraphQL API for sponsors
     const query = `
         query {

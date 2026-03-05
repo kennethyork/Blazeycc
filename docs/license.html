@@ -150,6 +150,42 @@
         .copied {
             color: #4ade80;
         }
+        .tier-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .tier-badge.pro-plus {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+        }
+        .tier-features {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+        .tier-features h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #667eea;
+        }
+        .tier-features ul {
+            list-style: none;
+            padding: 0;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.8;
+        }
+        .tier-features li {
+            padding: 2px 0;
+        }
         .instructions {
             margin-top: 30px;
             padding: 20px;
@@ -228,9 +264,15 @@
             </form>
             
             <div class="result" id="result">
+                <div class="tier-badge" id="tierBadge">Pro</div>
                 <div class="result-label">Your License Key:</div>
                 <div class="license-key" id="licenseKey" onclick="copyKey()"></div>
                 <div class="copy-hint" id="copyHint">Click to copy</div>
+                
+                <div class="tier-features" id="tierFeatures">
+                    <h3>Your Features:</h3>
+                    <ul id="featuresList"></ul>
+                </div>
                 
                 <div class="instructions">
                     <h3>How to activate:</h3>
@@ -249,7 +291,7 @@
             </div>
             
             <a href="https://github.com/sponsors/theKennethy" class="sponsor-link" target="_blank">
-                ❤️ Become a Sponsor
+                ❤️ Become a Sponsor ($5/mo Pro or $7/mo Pro+)
             </a>
             
             <a href="/" class="back-link">← Back to Blazeycc</a>
@@ -297,7 +339,36 @@
                 throw new Error(data.message || data.error || 'Failed to verify sponsor');
             }
             
-            return data.licenseKey;
+            return { licenseKey: data.licenseKey, tier: data.tier || 'pro' };
+        }
+        
+        const proFeatures = [
+            '✅ No watermark on videos',
+            '✅ 4K export support',
+            '✅ Custom watermarks',
+            '✅ Fast encoding (2x speed)',
+            '✅ Batch URL recording',
+            '✅ Scheduled recordings',
+            '✅ Cloud history sync'
+        ];
+        
+        const proPlusFeatures = [
+            ...proFeatures,
+            '✅ 5GB Cloud Storage',
+            '✅ Shareable video links',
+            '✅ Cloud preview/streaming',
+            '✅ Export to YouTube/Vimeo'
+        ];
+        
+        function showFeatures(tier) {
+            const badge = document.getElementById('tierBadge');
+            const list = document.getElementById('featuresList');
+            const features = tier === 'pro+' ? proPlusFeatures : proFeatures;
+            
+            badge.textContent = tier === 'pro+' ? 'Pro+' : 'Pro';
+            badge.className = 'tier-badge' + (tier === 'pro+' ? ' pro-plus' : '');
+            
+            list.innerHTML = features.map(f => `<li>${f}</li>`).join('');
         }
         
         document.getElementById('licenseForm').addEventListener('submit', async (e) => {
@@ -310,16 +381,17 @@
             btn.textContent = 'Verifying...';
             
             try {
-                let key;
+                let result;
                 if (WORKER_URL) {
                     // Secure: verify sponsor via GitHub API
-                    key = await generateKeyServer(email);
+                    result = await generateKeyServer(email);
                 } else {
                     // Fallback: client-side generation (trust-based)
-                    key = await generateKeyClient(email);
+                    result = { licenseKey: await generateKeyClient(email), tier: 'pro' };
                 }
                 
-                document.getElementById('licenseKey').textContent = key;
+                document.getElementById('licenseKey').textContent = result.licenseKey;
+                showFeatures(result.tier);
                 document.getElementById('result').classList.add('show');
                 hint.textContent = 'Click to copy';
                 hint.classList.remove('copied');

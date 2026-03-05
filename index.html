@@ -21,7 +21,7 @@
             <div class="header-actions">
                 <button id="themeToggleBtn" class="btn btn-icon" title="Toggle Theme">🌙</button>
                 <button id="historyBtn" class="btn btn-icon" title="Recording History">📁 History</button>
-                <button id="cloudLibraryBtn" class="btn btn-icon pro-btn-locked" title="Cloud Library (Pro)">☁️ Cloud</button>
+                <button id="cloudLibraryBtn" class="btn btn-icon pro-btn-locked" title="Cloud Library (Pro+ $7/mo)">☁️ Cloud</button>
                 <button id="settingsBtn" class="btn btn-icon" title="Settings">⚙️</button>
             </div>
         </header>
@@ -212,10 +212,10 @@
             </div>
         </section>
 
-        <!-- Cloud Library Panel (hidden by default, Pro feature) -->
+        <!-- Cloud Library Panel (hidden by default, Pro+ feature) -->
         <section class="cloud-library-panel" id="cloudLibraryPanel" style="display: none;">
             <div class="panel-header">
-                <h3>☁️ Cloud Library</h3>
+                <h3>☁️ Cloud Library <span class="pro-plus-badge">Pro+</span></h3>
                 <div class="panel-actions">
                     <span class="storage-usage" id="storageUsageDisplay">-- / 5 GB</span>
                     <button id="refreshCloudBtn" class="btn btn-small">🔄 Refresh</button>
@@ -293,11 +293,11 @@
                             <span class="pro-lock">🔒</span>
                         </label>
                     </div>
-                    <div class="setting-item pro-feature">
+                    <div class="setting-item pro-plus-feature">
                         <label>
                             <input type="checkbox" id="enableCloudSync" disabled>
-                            Cloud Sync (Google Drive/Dropbox)
-                            <span class="pro-lock">🔒</span>
+                            Cloud Storage (5GB) 
+                            <span class="pro-plus-lock">🔒 Pro+</span>
                         </label>
                     </div>
                     
@@ -330,9 +330,9 @@
                         </div>
                     </div>
                     
-                    <!-- Cloud Sync Section (Pro) -->
-                    <div class="cloud-sync-section pro-feature-panel" id="cloudSyncSection" style="display: none;">
-                        <h4>☁️ Blazeycc Cloud Storage</h4>
+                    <!-- Cloud Storage Section (Pro+) -->
+                    <div class="cloud-sync-section pro-plus-feature-panel" id="cloudSyncSection" style="display: none;">
+                        <h4>☁️ Blazeycc Cloud Storage <span class="pro-plus-badge">Pro+</span></h4>
                         <p class="help-text">5GB cloud storage for your recordings. Upload and access from anywhere.</p>
                         <div class="cloud-storage-info">
                             <div class="storage-meter">

@@ -1223,6 +1223,35 @@ html[data-theme="light"] body {
     font-size: 0.9rem;
 }
 
+.pro-plus-lock {
+    margin-left: auto;
+    font-size: 0.75rem;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 600;
+}
+
+.pro-plus-badge {
+    font-size: 0.7rem;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    color: white;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    margin-left: 0.5rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.pro-plus-feature {
+    opacity: 0.6;
+}
+
+.pro-plus-feature.unlocked {
+    opacity: 1;
+}
+
 .btn-pro {
     display: block;
     width: 100%;

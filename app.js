@@ -758,14 +758,14 @@ function renderHistory() {
                 <span class="history-date">${date}</span>
             </div>
             <div class="history-actions">
-                <button class="btn btn-small btn-upload-cloud pro-only-btn" data-action="upload" data-path="${record.path}" title="Upload to Cloud (Pro)" style="display: none;">⬆️</button>
+                <button class="btn btn-small btn-upload-cloud pro-plus-btn" data-action="upload" data-path="${record.path}" title="Upload to Cloud (Pro+)" style="display: none;">⬆️</button>
                 <button class="btn btn-small" data-action="open" data-path="${record.path}">📂 Show</button>
                 <button class="btn btn-small btn-danger" data-action="delete" data-path="${record.path}">🗑️</button>
             </div>
         `;
         
-        // Show upload button for Pro users
-        if (isProLicensed) {
+        // Show upload button for Pro+ users only
+        if (isProPlusLicensed) {
             const uploadBtn = item.querySelector('[data-action="upload"]');
             if (uploadBtn) uploadBtn.style.display = '';
         }
@@ -809,14 +809,14 @@ async function clearHistory() {
 }
 
 // =====================
-// Cloud Library functions (Pro)
+// Cloud Library functions (Pro+)
 // =====================
 
 async function toggleCloudLibraryPanel() {
-    // Check if Pro license
-    const isPro = await window.electronAPI.isProLicensed();
-    if (!isPro) {
-        showNotification('Cloud Library requires a Pro license', 'error');
+    // Check if Pro+ license (cloud storage requires Pro+)
+    const isProPlus = await window.electronAPI.isProPlusLicensed();
+    if (!isProPlus) {
+        showNotification('Cloud Library requires a Pro+ license ($7/mo)', 'error');
         return;
     }
     
@@ -928,9 +928,9 @@ function updateStorageDisplay(usage) {
 }
 
 async function uploadToCloud(filePath) {
-    const isPro = await window.electronAPI.isProLicensed();
-    if (!isPro) {
-        return { success: false, error: 'Pro license required' };
+    const isProPlus = await window.electronAPI.isProPlusLicensed();
+    if (!isProPlus) {
+        return { success: false, error: 'Pro+ license required ($7/mo)' };
     }
     
     const result = await window.electronAPI.cloudStorageUpload(filePath);
@@ -1110,16 +1110,25 @@ function stopAutoScroll() {
 
 // License management
 let isProLicensed = false;
+let isProPlusLicensed = false;
+let licenseTier = null;
 
 async function loadLicense() {
     try {
         const license = await window.electronAPI.getLicense();
         if (license && license.isValid) {
             isProLicensed = true;
-            showLicenseActive(license.email);
+            licenseTier = await window.electronAPI.getLicenseTier();
+            isProPlusLicensed = licenseTier === 'pro+';
+            showLicenseActive(license.email, licenseTier);
             unlockProFeatures();
+            if (isProPlusLicensed) {
+                unlockProPlusFeatures();
+            }
         } else {
             isProLicensed = false;
+            isProPlusLicensed = false;
+            licenseTier = null;
             showLicenseInactive();
         }
     } catch (error) {
@@ -1127,14 +1136,16 @@ async function loadLicense() {
     }
 }
 
-function showLicenseActive(email) {
+function showLicenseActive(email, tier) {
     const inactiveSection = document.getElementById('licenseInactive');
     const activeSection = document.getElementById('licenseActive');
     const emailDisplay = document.getElementById('licenseEmailDisplay');
+    const tierDisplay = document.getElementById('licenseTierDisplay');
     
     if (inactiveSection) inactiveSection.style.display = 'none';
     if (activeSection) activeSection.style.display = 'block';
     if (emailDisplay) emailDisplay.textContent = email;
+    if (tierDisplay) tierDisplay.textContent = tier === 'pro+' ? 'Pro+' : 'Pro';
 }
 
 function showLicenseInactive() {
@@ -1151,16 +1162,51 @@ function unlockProFeatures() {
         proSection.classList.add('pro-unlocked');
     }
     
-    // Enable Pro checkboxes
-    const proCheckboxes = document.querySelectorAll('.pro-feature input');
+    // Enable Pro checkboxes (except cloud storage which is Pro+)
+    const proCheckboxes = document.querySelectorAll('.pro-feature input:not(#enableCloudSync)');
     proCheckboxes.forEach(cb => {
         cb.disabled = false;
     });
-    
-    // Unlock cloud library button
+}
+
+function unlockProPlusFeatures() {
+    // Unlock cloud library button (Pro+ only)
     if (elements.cloudLibraryBtn) {
         elements.cloudLibraryBtn.classList.remove('pro-btn-locked');
         elements.cloudLibraryBtn.classList.add('unlocked');
+    }
+    
+    // Enable cloud sync checkbox
+    const cloudSyncCheckbox = document.getElementById('enableCloudSync');
+    if (cloudSyncCheckbox) {
+        cloudSyncCheckbox.disabled = false;
+    }
+    
+    // Show cloud storage section
+    const cloudSyncSection = document.getElementById('cloudSyncSection');
+    if (cloudSyncSection) {
+        cloudSyncSection.style.display = 'block';
+    }
+}
+
+function lockProPlusFeatures() {
+    // Lock cloud library button
+    if (elements.cloudLibraryBtn) {
+        elements.cloudLibraryBtn.classList.add('pro-btn-locked');
+        elements.cloudLibraryBtn.classList.remove('unlocked');
+    }
+    
+    // Disable cloud sync checkbox
+    const cloudSyncCheckbox = document.getElementById('enableCloudSync');
+    if (cloudSyncCheckbox) {
+        cloudSyncCheckbox.disabled = true;
+        cloudSyncCheckbox.checked = false;
+    }
+    
+    // Hide cloud storage section
+    const cloudSyncSection = document.getElementById('cloudSyncSection');
+    if (cloudSyncSection) {
+        cloudSyncSection.style.display = 'none';
     }
 }
 
@@ -1177,11 +1223,8 @@ function lockProFeatures() {
         cb.checked = false;
     });
     
-    // Lock cloud library button
-    if (elements.cloudLibraryBtn) {
-        elements.cloudLibraryBtn.classList.add('pro-btn-locked');
-        elements.cloudLibraryBtn.classList.remove('unlocked');
-    }
+    // Also lock Pro+ features
+    lockProPlusFeatures();
 }
 
 async function activateLicense() {

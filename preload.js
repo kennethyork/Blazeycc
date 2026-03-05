@@ -34,10 +34,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // License
     getLicense: () => ipcRenderer.invoke('get-license'),
-    setLicense: (email, key) => ipcRenderer.invoke('set-license', { email, key }),
+    setLicense: (email, key, tier) => ipcRenderer.invoke('set-license', { email, key, tier }),
     validateLicense: (email, key) => ipcRenderer.invoke('validate-license', { email, key }),
     clearLicense: () => ipcRenderer.invoke('clear-license'),
     isProLicensed: () => ipcRenderer.invoke('is-pro-licensed'),
+    isProPlusLicensed: () => ipcRenderer.invoke('is-pro-plus-licensed'),
+    getLicenseTier: () => ipcRenderer.invoke('get-license-tier'),
     redeemPromo: (email, code) => ipcRenderer.invoke('redeem-promo', { email, code }),
     trackUsage: (action, metadata) => ipcRenderer.invoke('track-usage', { action, metadata }),
     

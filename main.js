@@ -808,7 +808,7 @@ ipcMain.handle('get-license', async () => {
     return { email: null, key: null, isValid: false };
 });
 
-ipcMain.handle('set-license', async (event, { email, key }) => {
+ipcMain.handle('set-license', async (event, { email, key, tier }) => {
     if (!email || !key) {
         return { success: false, message: 'Email and license key are required' };
     }
@@ -828,13 +828,14 @@ ipcMain.handle('set-license', async (event, { email, key }) => {
     store.set('license', {
         email,
         key,
+        tier: tier || 'pro',  // 'pro' or 'pro+'
         activatedAt: new Date().toISOString()
     });
     
     // Track license activation
-    trackUsage('license_activated');
+    trackUsage('license_activated', { tier: tier || 'pro' });
     
-    return { success: true, message: 'Pro license activated!' };
+    return { success: true, message: tier === 'pro+' ? 'Pro+ license activated!' : 'Pro license activated!' };
 });
 
 ipcMain.handle('validate-license', async (event, { email, key }) => {
@@ -887,6 +888,24 @@ ipcMain.handle('is-pro-licensed', async () => {
         return validateLicenseKey(license.email, license.key);
     }
     return false;
+});
+
+// Check if Pro+ licensed (includes cloud storage)
+ipcMain.handle('is-pro-plus-licensed', async () => {
+    const license = store.get('license', null);
+    if (license && license.email && license.key && license.tier === 'pro+') {
+        return validateLicenseKey(license.email, license.key);
+    }
+    return false;
+});
+
+// Get license tier
+ipcMain.handle('get-license-tier', async () => {
+    const license = store.get('license', null);
+    if (license && license.email && license.key && validateLicenseKey(license.email, license.key)) {
+        return license.tier || 'pro';
+    }
+    return null;
 });
 
 // Scheduled recordings storage

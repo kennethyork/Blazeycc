@@ -1260,9 +1260,8 @@ async function handleStripeCheckout(request, env, corsHeaders) {
     
     const { email, tier, successUrl, cancelUrl } = await request.json();
     
-    if (!email) {
-        return jsonResponse({ error: 'Email required' }, 400, corsHeaders);
-    }
+    // Email is optional - Stripe will collect it at checkout if not provided
+    const customerEmail = email ? email.toLowerCase().trim() : null;
     
     // Check if this is a lifetime purchase
     const isLifetime = tier?.startsWith('lifetime_');
@@ -1302,14 +1301,14 @@ async function handleStripeCheckout(request, env, corsHeaders) {
         },
         body: new URLSearchParams({
             'mode': isLifetime ? 'payment' : 'subscription',
-            'customer_email': email.toLowerCase().trim(),
+            ...(customerEmail && { 'customer_email': customerEmail }),
             'line_items[0][price]': priceId,
             'line_items[0][quantity]': '1',
-            'success_url': successUrl || 'https://blazeycc.com/success',
-            'cancel_url': cancelUrl || 'https://blazeycc.com/pricing',
+            'success_url': successUrl || 'https://blazeycc.com/license.html?success=true',
+            'cancel_url': cancelUrl || 'https://blazeycc.com/pricing.html',
             'metadata[tier]': storedTier,
             'metadata[is_lifetime]': isLifetime ? 'true' : 'false',
-            'metadata[email]': email.toLowerCase().trim(),
+            ...(customerEmail && { 'metadata[email]': customerEmail }),
         }),
     });
     

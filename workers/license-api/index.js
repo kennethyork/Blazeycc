@@ -1379,7 +1379,35 @@ async function logAnalytics(db, eventType, email, licenseKey, request, metadata 
 // CLOUD STORAGE HANDLERS (R2)
 // =====================
 
-const STORAGE_LIMIT_BYTES = 5 * 1024 * 1024 * 1024; // 5GB default
+// Storage limits per tier in bytes
+const STORAGE_LIMITS = {
+    'pro': 0,                          // No cloud storage for Pro
+    'pro+': 2 * 1024 * 1024 * 1024,     // 2GB for Pro+
+    'pro_plus': 2 * 1024 * 1024 * 1024, // 2GB for Pro+
+    'pro_max': 15 * 1024 * 1024 * 1024, // 15GB for Pro Max
+    'pro-max': 15 * 1024 * 1024 * 1024  // 15GB for Pro Max
+};
+
+async function getStorageLimitForUser(env, email) {
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Check subscription first
+    const subscription = await env.DB.prepare(
+        "SELECT tier FROM subscriptions WHERE email = ? AND status IN ('active', 'trialing')"
+    ).bind(normalizedEmail).first();
+    
+    let tier = 'pro';
+    if (subscription) {
+        tier = subscription.tier;
+    } else {
+        const allowedEntry = await env.DB.prepare(
+            'SELECT tier FROM allowed_emails WHERE email = ?'
+        ).bind(normalizedEmail).first();
+        tier = allowedEntry?.tier || 'pro';
+    }
+    
+    return STORAGE_LIMITS[tier] || 0;
+}
 
 function checkR2Available(env, corsHeaders) {
     if (!env.STORAGE) {
@@ -1413,10 +1441,18 @@ async function handleStorageUpload(request, env, corsHeaders) {
         return jsonResponse({ error: 'Invalid license' }, 401, corsHeaders);
     }
     
+    // Get tier-based storage limit
+    const limitBytes = await getStorageLimitForUser(env, normalizedEmail);
+    if (limitBytes === 0) {
+        return jsonResponse({ 
+            error: 'Cloud storage not available for your tier',
+            message: 'Upgrade to Pro+ or Pro Max to access cloud storage'
+        }, 403, corsHeaders);
+    }
+    
     // Check current storage usage
     const usage = await calculateStorageUsage(env, normalizedEmail);
     const contentLength = parseInt(request.headers.get('content-length') || '0');
-    const limitBytes = parseInt(env.STORAGE_LIMIT_MB || '5120') * 1024 * 1024;
     
     if (usage + contentLength > limitBytes) {
         return jsonResponse({ 
@@ -1489,7 +1525,7 @@ async function handleStorageList(request, env, corsHeaders) {
     `).bind(normalizedEmail).all();
     
     const baseUrl = new URL(request.url).origin;
-    const limitBytes = parseInt(env.STORAGE_LIMIT_MB || '5120') * 1024 * 1024;
+    const limitBytes = await getStorageLimitForUser(env, normalizedEmail);
     const usage = await calculateStorageUsage(env, normalizedEmail);
     
     return jsonResponse({ 
@@ -1610,14 +1646,14 @@ async function handleStorageUsage(request, env, corsHeaders) {
     }
     
     const usage = await calculateStorageUsage(env, normalizedEmail);
-    const limitBytes = parseInt(env.STORAGE_LIMIT_MB || '5120') * 1024 * 1024;
+    const limitBytes = await getStorageLimitForUser(env, normalizedEmail);
     
     return jsonResponse({ 
         success: true,
         used: usage,
         limit: limitBytes,
-        available: limitBytes - usage,
-        percentUsed: Math.round((usage / limitBytes) * 100)
+        available: Math.max(0, limitBytes - usage),
+        percentUsed: limitBytes > 0 ? Math.round((usage / limitBytes) * 100) : 0
     }, 200, corsHeaders);
 }
 

@@ -30,7 +30,7 @@
   },
   "license": "GPL-3.0",
   "devDependencies": {
-    "electron": "^40.6.1",
+    "electron": "^40.8.0",
     "electron-builder": "^26.8.1",
     "eslint": "^8.57.0"
   },

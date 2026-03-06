@@ -49,6 +49,23 @@
 
 > **Note:** Linux users may need to run with `--no-sandbox` flag. macOS users: right-click → Open on first launch.
 
+### Linux Audio Capture
+
+For audio capture on Linux, install PulseAudio or PipeWire:
+
+```bash
+# Debian/Ubuntu
+sudo apt install pulseaudio
+
+# Fedora (PipeWire is default on Fedora 34+)
+sudo dnf install pipewire-pulseaudio
+
+# Arch
+sudo pacman -S pulseaudio
+```
+
+> **Tip:** PipeWire (default on Ubuntu 22.10+, Fedora 34+) works automatically. For desktop audio, select a "Monitor" source when prompted.
+
 ---
 
 ## ✨ Features

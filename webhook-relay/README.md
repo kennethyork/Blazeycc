@@ -1,63 +1,90 @@
-# GitHub Sponsors → License Automation
+# Stripe → License Automation
 
-This webhook relay automatically delivers license keys to GitHub Sponsors via GitHub Issues.
+This webhook relay automatically delivers license keys to Stripe subscribers.
 
 ## How It Works
 
 ```text
-Sponsor on GitHub → GitHub webhook → Cloudflare Worker → GitHub Actions → Issue with license key
-                                                                               ↓
-                                                        Sponsor gets @mentioned & notified
+Customer subscribes → Stripe webhook → Cloudflare Worker → License API + Email
+                                              ↓
+                               Customer receives license via email
 ```
-
-**No email required!** Sponsors receive their license key directly on GitHub.
 
 ## Setup Steps
 
-### 1. Create a GitHub Personal Access Token
+### 1. Create Stripe Account & Products
 
-1. Go to github.com → Settings → Developer settings → Personal access tokens
-2. Create a fine-grained token with:
-   - Repository access: `blazeycc/Blazeycc`
-   - Permissions: Issues (Read and Write), Contents (Read)
-3. Copy the token
+1. Go to [stripe.com/dashboard](https://dashboard.stripe.com)
+2. Create Products:
+   - **Blazeycc Pro** ($5/month recurring)
+   - **Blazeycc Pro+** ($7/month recurring)
+3. Copy the Price IDs (price_xxx)
 
 ### 2. Deploy the Cloudflare Worker
 
 1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) (free account)
 2. Click **Workers & Pages** → **Create Worker**
 3. Paste the code from `cloudflare-worker.js`
-4. Click **Settings** → **Variables** → Add:
-   - `LICENSE_SECRET`: Your license key secret (same as generate-key.js)
-   - `GITHUB_TOKEN`: The PAT from step 1
-5. Deploy and copy your worker URL (e.g., `https://your-worker.workers.dev`)
+4. Click **Settings** → **Variables** → Add secrets:
+   - `STRIPE_WEBHOOK_SECRET`: Webhook signing secret from Stripe (whsec_xxx)
+   - `LICENSE_SECRET`: Your license key HMAC secret
+   - `LICENSE_API_URL`: URL of your license API worker (optional)
+   - `ADMIN_KEY`: Admin key for license API (optional)
+   - `SENDGRID_API_KEY`: For sending license emails (optional)
+5. Deploy and copy your worker URL
 
-### 3. Configure GitHub Sponsors Webhook
+### 3. Configure Stripe Webhook
 
-1. Go to [github.com/sponsors/blazeycc/dashboard](https://github.com/sponsors/blazeycc/dashboard)
-2. Click **Webhooks** tab
-3. Click **Add webhook**
-4. Enter your Cloudflare Worker URL
-5. Create a webhook secret and add it as `WEBHOOK_SECRET` env var in your worker
-6. Select event: **Sponsorship** → **created**
-7. Save
+1. Go to [Stripe Dashboard → Developers → Webhooks](https://dashboard.stripe.com/webhooks)
+2. Click **Add endpoint**
+3. Enter your Cloudflare Worker URL
+4. Select events:
+   - `checkout.session.completed`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.payment_failed`
+   - `invoice.paid`
+5. Click **Add endpoint**
+6. Copy the **Signing secret** (whsec_xxx) and add to worker env vars
 
-### 4. Create Sponsor Tiers
+### 4. Configure License API (Optional)
 
-1. Go to [github.com/sponsors/blazeycc/dashboard](https://github.com/sponsors/blazeycc/dashboard)
-2. Create tier(s):
-   - **Blazeycc Pro** ($5/month): Unlock Pro features (no watermark, 4K, batch recording, etc.)
-   - **Blazeycc Pro+** ($7/month): All Pro features + 5GB cloud storage, shareable links
+Add Stripe secrets to your license API worker:
+```bash
+cd workers/license-api
+wrangler secret put STRIPE_SECRET_KEY      # sk_live_xxx or sk_test_xxx
+wrangler secret put STRIPE_WEBHOOK_SECRET  # whsec_xxx
+wrangler secret put STRIPE_PRICE_PRO       # price_xxx for $5/mo
+wrangler secret put STRIPE_PRICE_PRO_PLUS  # price_xxx for $7/mo
+```
 
 ### 5. Test the Setup
 
-1. Use GitHub's webhook test feature in the dashboard
-2. Or sponsor yourself with a test tier
-3. Check that an issue was created with the license key
+1. Use Stripe's test mode (sk_test_xxx keys)
+2. Create a test checkout session
+3. Verify webhook is received and license email is sent
 
-## What Sponsors See
+## API Endpoints
 
-When someone becomes a sponsor, they receive a GitHub notification and see an issue with their license key, activation instructions, and a list of Pro features.
+The license API now supports:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/stripe/checkout` | POST | Create Stripe checkout session |
+| `/stripe/portal` | POST | Get customer billing portal URL |
+| `/stripe/webhook` | POST | Handle Stripe webhooks |
+| `/validate` | POST | Validate license key |
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `STRIPE_WEBHOOK_SECRET` | Yes | Stripe webhook signing secret |
+| `LICENSE_SECRET` | Yes | HMAC secret for license keys |
+| `LICENSE_API_URL` | No | URL of license API for syncing |
+| `ADMIN_KEY` | No | Admin key for license API |
+| `SENDGRID_API_KEY` | No | For sending license emails |
+| `FROM_EMAIL` | No | Sender email (default: noreply@blazey.cc) |
 
 ## Manual Delivery
 

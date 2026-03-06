@@ -3,7 +3,6 @@ main = "index.js"
 compatibility_date = "2024-01-01"
 
 [vars]
-GITHUB_USERNAME = "theKennethy"
 STORAGE_LIMIT_MB = "5120"  # 5GB per user
 
 [[d1_databases]]
@@ -18,5 +17,8 @@ bucket_name = "blazeycc-recordings"
 
 # Secrets (set via wrangler secret put):
 # - LICENSE_SECRET: Your HMAC secret for generating keys
-# - GITHUB_TOKEN: GitHub personal access token with read:user and read:org scope
 # - ADMIN_KEY: Secret key for admin API endpoints
+# - STRIPE_SECRET_KEY: Stripe secret key (sk_live_xxx or sk_test_xxx)
+# - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret (whsec_xxx)
+# - STRIPE_PRICE_PRO: Stripe Price ID for Pro tier ($5/mo)
+# - STRIPE_PRICE_PRO_PLUS: Stripe Price ID for Pro+ tier ($7/mo)

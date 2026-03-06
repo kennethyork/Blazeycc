@@ -954,6 +954,63 @@ ipcMain.handle('redeem-promo', async (event, { email, code }) => {
     return { success: false, message: result.error || result.message || 'Invalid promo code' };
 });
 
+// Create Stripe checkout session
+ipcMain.handle('create-stripe-checkout', async (event, { email, tier }) => {
+    if (!email) {
+        return { error: 'Email is required' };
+    }
+    
+    try {
+        const response = await fetch('https://blazeycc-license.kennethhy-me.workers.dev/stripe/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                tier: tier || 'pro',
+                successUrl: 'https://blazeycc.com/success',
+                cancelUrl: 'https://blazeycc.com/pricing'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.url) {
+            return { url: data.url, sessionId: data.sessionId };
+        } else {
+            return { error: data.error || 'Failed to create checkout session' };
+        }
+    } catch (error) {
+        console.error('Stripe checkout error:', error);
+        return { error: 'Failed to connect to payment service' };
+    }
+});
+
+// Open Stripe customer portal
+ipcMain.handle('open-stripe-portal', async (event, { email }) => {
+    if (!email) {
+        return { error: 'Email is required' };
+    }
+    
+    try {
+        const response = await fetch('https://blazeycc-license.kennethhy-me.workers.dev/stripe/portal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        
+        const data = await response.json();
+        
+        if (data.url) {
+            return { url: data.url };
+        } else {
+            return { error: data.error || 'No subscription found' };
+        }
+    } catch (error) {
+        console.error('Stripe portal error:', error);
+        return { error: 'Failed to connect to payment service' };
+    }
+});
+
 // Track usage from renderer
 ipcMain.handle('track-usage', async (event, { action, metadata }) => {
     await trackUsage(action, metadata);

@@ -99,6 +99,26 @@ CREATE TABLE IF NOT EXISTS recording_history (
 CREATE INDEX IF NOT EXISTS idx_history_email ON recording_history(email);
 CREATE INDEX IF NOT EXISTS idx_history_date ON recording_history(recorded_at);
 
+-- Stripe subscriptions
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    stripe_customer_id TEXT,
+    stripe_subscription_id TEXT,
+    tier TEXT NOT NULL DEFAULT 'pro',  -- 'pro' or 'pro+'
+    status TEXT NOT NULL DEFAULT 'active',  -- 'active', 'canceled', 'past_due', 'trialing'
+    current_period_start DATETIME,
+    current_period_end DATETIME,
+    cancel_at_period_end INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_email ON subscriptions(email);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer ON subscriptions(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_sub ON subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+
 -- Cloud storage files (R2)
 CREATE TABLE IF NOT EXISTS cloud_storage (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

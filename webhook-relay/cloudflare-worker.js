@@ -1,19 +1,26 @@
 /**
- * GitHub Sponsors Webhook Handler + License Generator
+ * Stripe Webhook Handler + License Generator
  * 
  * Deploy this to Cloudflare Workers (free tier)
- * This receives GitHub Sponsors webhooks and triggers GitHub Actions to create an issue
- * with the license key for the sponsor.
+ * This receives Stripe webhooks and syncs subscription data.
  * 
  * Setup:
  * 1. Go to dash.cloudflare.com → Workers & Pages → Create Worker
  * 2. Paste this code
  * 3. Add environment variables:
- *    - WEBHOOK_SECRET: Your GitHub webhook secret
+ *    - STRIPE_WEBHOOK_SECRET: Your Stripe webhook signing secret (whsec_xxx)
  *    - LICENSE_SECRET: Secret for generating license keys
- *    - GITHUB_TOKEN: GitHub PAT with repo scope for triggering workflows
+ *    - LICENSE_API_URL: URL of your license API worker (optional)
+ *    - ADMIN_KEY: Admin key for license API (optional)
+ *    - SENDGRID_API_KEY: For sending license emails (optional)
  * 4. Deploy and copy the worker URL
- * 5. Go to github.com/sponsors/blazeycc/dashboard → Webhooks → Add webhook URL
+ * 5. Go to Stripe Dashboard → Developers → Webhooks → Add endpoint URL
+ *    Events to listen:
+ *    - checkout.session.completed
+ *    - customer.subscription.updated
+ *    - customer.subscription.deleted
+ *    - invoice.payment_failed
+ *    - invoice.paid
  */
 
 export default {
@@ -23,69 +30,106 @@ export default {
       return new Response('Method not allowed', { status: 405 });
     }
 
+    const signature = request.headers.get('Stripe-Signature');
+    const body = await request.text();
+
     try {
-      const payload = await request.json();
-      
-      // Handle GitHub Sponsors webhook
-      const action = payload.action;
-      const sponsorship = payload.sponsorship;
-      
-      if (!sponsorship) {
-        return new Response('Not a sponsorship event', { status: 200 });
+      // Verify webhook signature
+      if (env.STRIPE_WEBHOOK_SECRET) {
+        const isValid = await verifyStripeSignature(body, signature, env.STRIPE_WEBHOOK_SECRET);
+        if (!isValid) {
+          console.error('Invalid Stripe webhook signature');
+          return new Response('Invalid signature', { status: 401 });
+        }
       }
-      
-      // Only process new sponsorships
-      if (action !== 'created') {
-        console.log(`Skipping action: ${action}`);
-        return new Response(`Skipping action: ${action}`, { status: 200 });
+
+      const event = JSON.parse(body);
+      console.log(`Stripe event: ${event.type}`);
+
+      // Handle the event
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object;
+          await handleCheckoutComplete(session, env);
+          break;
+        }
+
+        case 'customer.subscription.updated': {
+          const subscription = event.data.object;
+          console.log(`📋 Subscription ${subscription.id}: ${subscription.status}`);
+          break;
+        }
+
+        case 'customer.subscription.deleted': {
+          const subscription = event.data.object;
+          console.log(`❌ Subscription canceled: ${subscription.id}`);
+          break;
+        }
+
+        case 'invoice.payment_failed': {
+          const invoice = event.data.object;
+          console.log(`⚠️ Payment failed: ${invoice.id}`);
+          break;
+        }
+
+        case 'invoice.paid': {
+          const invoice = event.data.object;
+          console.log(`💰 Invoice paid: ${invoice.id}`);
+          break;
+        }
+
+        default:
+          console.log(`Unhandled event: ${event.type}`);
       }
-      
-      const sponsor = sponsorship.sponsor;
-      const tier = sponsorship.tier;
-      
-      const sponsorLogin = sponsor.login;
-      const sponsorEmail = sponsor.email || `${sponsorLogin}@users.noreply.github.com`;
-      const tierName = tier.name;
-      const amount = tier.monthly_price_in_dollars;
-      
-      // Determine license tier based on amount: $5/mo = pro, $7+/mo = pro+
-      const licenseTier = amount >= 7 ? 'pro+' : 'pro';
-      
-      // Generate license key
-      const licenseKey = await generateLicenseKey(sponsorEmail, env.LICENSE_SECRET);
-      
-      console.log(`✅ New sponsor: ${sponsorLogin} (${tierName} - $${amount}/month) → ${licenseTier}`);
-      console.log(`🔑 License: ${licenseKey}`);
-      
-      // Trigger GitHub Actions to create issue with license key
-      if (env.GITHUB_TOKEN) {
-        await triggerGitHubWorkflow(sponsorLogin, sponsorEmail, licenseKey, tierName, amount, licenseTier, env);
-      }
-      
-      return new Response(JSON.stringify({
-        success: true,
-        sponsor: sponsorLogin,
-        licenseKey: licenseKey,
-        tier: licenseTier,
-        tierName: tierName,
-        delivery: 'GitHub Issue'
-      }), {
+
+      return new Response(JSON.stringify({ received: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
       });
 
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Webhook error:', error);
       return new Response(`Error: ${error.message}`, { status: 500 });
     }
   }
 };
 
+async function handleCheckoutComplete(session, env) {
+  const email = session.customer_email?.toLowerCase().trim();
+  const customerId = session.customer;
+  const tier = session.metadata?.tier || (session.amount_total >= 700 ? 'pro+' : 'pro');
+
+  if (!email) {
+    console.error('No email in checkout session');
+    return;
+  }
+
+  const licenseKey = await generateLicenseKey(email, env.LICENSE_SECRET);
+  console.log(`✅ New subscriber: ${email} → ${tier}`);
+  console.log(`🔑 License: ${licenseKey}`);
+
+  // Add to license API allowed emails
+  if (env.LICENSE_API_URL && env.ADMIN_KEY) {
+    await fetch(`${env.LICENSE_API_URL}/admin/emails/add`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': env.ADMIN_KEY
+      },
+      body: JSON.stringify({ email, tier, note: `Stripe: ${customerId}` })
+    });
+  }
+
+  // Send welcome email
+  if (env.SENDGRID_API_KEY) {
+    await sendLicenseEmail(email, licenseKey, tier, env);
+  }
+}
+
 async function generateLicenseKey(email, secret) {
   const cleanEmail = email.toLowerCase().trim();
-  const secretKey = secret || '4f6fab93b5f0bfb47f3431ab19b230994e94cc946d479e27cf82b1b85c7aaee3';
+  const secretKey = secret || 'default-secret-change-me';
   
-  // Use Web Crypto API
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secretKey);
   const messageData = encoder.encode(cleanEmail);
@@ -98,40 +142,71 @@ async function generateLicenseKey(email, secret) {
   const hashArray = Array.from(new Uint8Array(signature));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   
-  const part1 = hashHex.slice(0, 4).toUpperCase();
-  const part2 = hashHex.slice(4, 8).toUpperCase();
-  const part3 = hashHex.slice(8, 12).toUpperCase();
-  const part4 = hashHex.slice(12, 16).toUpperCase();
-  
-  return `${part1}-${part2}-${part3}-${part4}`;
+  const shortHash = hashHex.substring(0, 32).toUpperCase();
+  return shortHash.match(/.{1,8}/g).join('-');
 }
 
-async function triggerGitHubWorkflow(sponsorLogin, sponsorEmail, licenseKey, tierName, amount, licenseTier, env) {
-  const response = await fetch('https://api.github.com/repos/blazeycc/Blazeycc/dispatches', {
+async function verifyStripeSignature(payload, signature, secret) {
+  if (!signature || !secret) return false;
+
+  const parts = signature.split(',');
+  let timestamp = '';
+  let signatures = [];
+
+  for (const part of parts) {
+    const [key, value] = part.split('=');
+    if (key === 't') timestamp = value;
+    if (key === 'v1') signatures.push(value);
+  }
+
+  // Check timestamp (5 min tolerance)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(timestamp)) > 300) return false;
+
+  const signedPayload = `${timestamp}.${payload}`;
+  const encoder = new TextEncoder();
+
+  const key = await crypto.subtle.importKey(
+    'raw', encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+
+  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signedPayload));
+  const expectedSig = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  return signatures.some(s => s === expectedSig);
+}
+
+async function sendLicenseEmail(email, licenseKey, tier, env) {
+  const tierName = tier === 'pro+' ? 'Pro+' : 'Pro';
+  
+  await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
-      'Accept': 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
-      'User-Agent': 'Blazeycc-Webhook'
+      'Authorization': `Bearer ${env.SENDGRID_API_KEY}`,
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      event_type: 'sponsor_created',
-      client_payload: {
-        sponsor_login: sponsorLogin,
-        sponsor_email: sponsorEmail,
-        license_key: licenseKey,
-        tier_name: tierName,
-        amount: amount,
-        license_tier: licenseTier  // 'pro' or 'pro+'
-      }
+      personalizations: [{ to: [{ email }] }],
+      from: { email: env.FROM_EMAIL || 'noreply@blazey.cc', name: 'Blazeycc' },
+      subject: `Your Blazeycc ${tierName} License 🔥`,
+      content: [{
+        type: 'text/html',
+        value: `
+          <h1>Welcome to Blazeycc ${tierName}!</h1>
+          <p>Thank you for subscribing. Here's your license key:</p>
+          <p style="font-family: monospace; font-size: 18px; background: #f0f0f0; padding: 15px; border-radius: 8px;">
+            <strong>${licenseKey}</strong>
+          </p>
+          <h3>How to activate:</h3>
+          <ol>
+            <li>Open Blazeycc</li>
+            <li>Go to Settings → License</li>
+            <li>Enter your email and click "Activate"</li>
+          </ol>
+          <p>Enjoy recording! 🎬</p>
+        `
+      }]
     })
   });
-  
-  if (response.ok || response.status === 204) {
-    console.log(`✅ Triggered GitHub workflow for ${sponsorLogin}`);
-  } else {
-    const error = await response.text();
-    console.error('GitHub API error:', response.status, error);
-  }
 }

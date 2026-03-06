@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Get Your Pro/Pro+ License - Blazeycc</title>
-    <meta name="description" content="Get your Blazeycc Pro or Pro+ license key for GitHub Sponsors">
+    <meta name="description" content="Get your Blazeycc Pro or Pro+ license key">
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -253,12 +253,12 @@
             </div>
             
             <h1>Get Your License Key</h1>
-            <p class="subtitle">Enter the email you used for GitHub Sponsors ($5/mo Pro or $7/mo Pro+)</p>
+            <p class="subtitle">Enter the email you used for your subscription ($5/mo Pro or $7/mo Pro+)</p>
             
             <form id="licenseForm">
                 <div class="form-group">
                     <label for="email">Email Address</label>
-                    <input type="email" id="email" placeholder="sponsor@example.com" required>
+                    <input type="email" id="email" placeholder="you@example.com" required>
                 </div>
                 <button type="submit" class="btn btn-primary" id="generateBtn">Generate License Key</button>
             </form>
@@ -287,11 +287,11 @@
             </div>
             
             <div class="note">
-                <strong>Not a sponsor yet?</strong> Become a GitHub Sponsor to unlock Pro ($5/mo) or Pro+ ($7/mo) features!
+                <strong>Not subscribed yet?</strong> Subscribe to unlock Pro ($5/mo) or Pro+ ($7/mo) features!
             </div>
             
-            <a href="https://github.com/sponsors/theKennethy" class="sponsor-link" target="_blank">
-                ❤️ Become a Sponsor ($5/mo Pro or $7/mo Pro+)
+            <a href="pricing.html" class="sponsor-link">
+                💳 Subscribe Now ($5/mo Pro or $7/mo Pro+)
             </a>
             
             <a href="/" class="back-link">← Back to Blazeycc</a>
@@ -299,7 +299,7 @@
     </div>
 
     <script>
-        // Use Cloudflare Worker API for secure sponsor verification
+        // Use Cloudflare Worker API for secure subscription verification
         const WORKER_URL = 'https://blazeycc-license.kennethhy-me.workers.dev';
         
         // Client-side fallback (only if worker not configured)

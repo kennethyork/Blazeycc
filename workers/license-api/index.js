@@ -28,10 +28,29 @@ export default {
             }
             
             // =====================
+            // STRIPE ENDPOINTS
+            // =====================
+            
+            // Stripe webhook handler
+            if (path === '/stripe/webhook' && request.method === 'POST') {
+                return handleStripeWebhook(request, env, corsHeaders);
+            }
+            
+            // Create Stripe checkout session
+            if (path === '/stripe/checkout' && request.method === 'POST') {
+                return handleStripeCheckout(request, env, corsHeaders);
+            }
+            
+            // Get Stripe customer portal URL
+            if (path === '/stripe/portal' && request.method === 'POST') {
+                return handleStripePortal(request, env, corsHeaders);
+            }
+            
+            // =====================
             // PUBLIC ENDPOINTS
             // =====================
             
-            // Get license key (sponsors, allowed emails, or promo codes)
+            // Get license key (subscribers, allowed emails, or promo codes)
             if (path === '/' && request.method === 'POST') {
                 return handleGetLicense(request, env, corsHeaders);
             }
@@ -199,13 +218,17 @@ async function handleGetLicense(request, env, corsHeaders) {
         'SELECT email, tier FROM allowed_emails WHERE email = ?'
     ).bind(normalizedEmail).first();
     
-    // Check GitHub sponsors
-    const isSponsor = allowedEntry || await verifySponsor(normalizedEmail, env.GITHUB_TOKEN, env.GITHUB_USERNAME);
+    // Check Stripe subscriptions
+    const subscription = await env.DB.prepare(
+        "SELECT tier, status FROM subscriptions WHERE email = ? AND status IN ('active', 'trialing')"
+    ).bind(normalizedEmail).first();
     
-    if (!isSponsor) {
+    const hasAccess = allowedEntry || subscription;
+    
+    if (!hasAccess) {
         return jsonResponse({ 
-            error: 'Not a sponsor',
-            message: 'This email is not associated with an active GitHub Sponsor. Please sponsor first at github.com/sponsors/theKennethy'
+            error: 'No active subscription',
+            message: 'This email is not associated with an active subscription. Please subscribe at blazeycc.com'
         }, 403, corsHeaders);
     }
     
@@ -223,8 +246,8 @@ async function handleGetLicense(request, env, corsHeaders) {
         }, 403, corsHeaders);
     }
     
-    // Get tier from DB entry, or default to 'pro' for GitHub sponsors not in DB
-    const tier = allowedEntry?.tier || 'pro';
+    // Get tier from subscription or allowed_emails
+    const tier = subscription?.tier || allowedEntry?.tier || 'pro';
     
     // Log analytics
     await logAnalytics(env.DB, 'license_generated', normalizedEmail, licenseKey, request);
@@ -255,13 +278,20 @@ async function handleValidateLicense(request, env, corsHeaders) {
     const expectedKey = await generateLicenseKey(normalizedEmail, env.LICENSE_SECRET);
     const valid = licenseKey === expectedKey;
     
-    // Get tier from DB
+    // Get tier from subscriptions or allowed_emails
     let tier = 'pro';  // Default tier
     if (valid) {
-        const allowedEntry = await env.DB.prepare(
-            'SELECT tier FROM allowed_emails WHERE email = ?'
+        const subscription = await env.DB.prepare(
+            "SELECT tier FROM subscriptions WHERE email = ? AND status IN ('active', 'trialing')"
         ).bind(normalizedEmail).first();
-        tier = allowedEntry?.tier || 'pro';
+        if (subscription) {
+            tier = subscription.tier;
+        } else {
+            const allowedEntry = await env.DB.prepare(
+                'SELECT tier FROM allowed_emails WHERE email = ?'
+            ).bind(normalizedEmail).first();
+            tier = allowedEntry?.tier || 'pro';
+        }
     }
     
     await logAnalytics(env.DB, valid ? 'license_check_valid' : 'license_check_invalid', normalizedEmail, licenseKey, request);
@@ -965,48 +995,229 @@ async function handleAdminDashboard(request, env, corsHeaders) {
 }
 
 // =====================
-// UTILITY FUNCTIONS
+// STRIPE HANDLERS
 // =====================
 
-async function verifySponsor(email, githubToken, githubUsername) {
-    const query = `
-        query {
-            user(login: "${githubUsername}") {
-                sponsorshipsAsMaintainer(first: 100, activeOnly: true) {
-                    nodes {
-                        sponsorEntity {
-                            ... on User { email login }
-                            ... on Organization { email login }
-                        }
-                    }
+async function handleStripeWebhook(request, env, corsHeaders) {
+    const signature = request.headers.get('Stripe-Signature');
+    const body = await request.text();
+    
+    // Verify webhook signature
+    if (env.STRIPE_WEBHOOK_SECRET) {
+        const isValid = await verifyStripeSignature(body, signature, env.STRIPE_WEBHOOK_SECRET);
+        if (!isValid) {
+            console.error('Invalid Stripe webhook signature');
+            return jsonResponse({ error: 'Invalid signature' }, 401, corsHeaders);
+        }
+    }
+    
+    const event = JSON.parse(body);
+    console.log(`Stripe event: ${event.type}`);
+    
+    try {
+        switch (event.type) {
+            case 'checkout.session.completed': {
+                const session = event.data.object;
+                const email = session.customer_email?.toLowerCase().trim();
+                const customerId = session.customer;
+                const subscriptionId = session.subscription;
+                
+                // Determine tier from metadata or price
+                const tier = session.metadata?.tier || 'pro';
+                
+                if (email && subscriptionId) {
+                    await env.DB.prepare(`
+                        INSERT INTO subscriptions (email, stripe_customer_id, stripe_subscription_id, tier, status)
+                        VALUES (?, ?, ?, ?, 'active')
+                        ON CONFLICT(email) DO UPDATE SET
+                            stripe_customer_id = excluded.stripe_customer_id,
+                            stripe_subscription_id = excluded.stripe_subscription_id,
+                            tier = excluded.tier,
+                            status = 'active',
+                            updated_at = CURRENT_TIMESTAMP
+                    `).bind(email, customerId, subscriptionId, tier).run();
+                    
+                    const licenseKey = await generateLicenseKey(email, env.LICENSE_SECRET);
+                    await logAnalytics(env.DB, 'subscription_created', email, licenseKey, request, { tier, via: 'stripe' });
                 }
+                break;
+            }
+            
+            case 'customer.subscription.updated': {
+                const subscription = event.data.object;
+                const subscriptionId = subscription.id;
+                const status = subscription.status;
+                const cancelAtPeriodEnd = subscription.cancel_at_period_end ? 1 : 0;
+                
+                // Map Stripe status to our status
+                const mappedStatus = ['active', 'trialing'].includes(status) ? status : 
+                                     status === 'past_due' ? 'past_due' : 'canceled';
+                
+                await env.DB.prepare(`
+                    UPDATE subscriptions SET 
+                        status = ?,
+                        cancel_at_period_end = ?,
+                        current_period_start = ?,
+                        current_period_end = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE stripe_subscription_id = ?
+                `).bind(
+                    mappedStatus,
+                    cancelAtPeriodEnd,
+                    new Date(subscription.current_period_start * 1000).toISOString(),
+                    new Date(subscription.current_period_end * 1000).toISOString(),
+                    subscriptionId
+                ).run();
+                break;
+            }
+            
+            case 'customer.subscription.deleted': {
+                const subscription = event.data.object;
+                await env.DB.prepare(`
+                    UPDATE subscriptions SET status = 'canceled', updated_at = CURRENT_TIMESTAMP
+                    WHERE stripe_subscription_id = ?
+                `).bind(subscription.id).run();
+                break;
+            }
+            
+            case 'invoice.payment_failed': {
+                const invoice = event.data.object;
+                await env.DB.prepare(`
+                    UPDATE subscriptions SET status = 'past_due', updated_at = CURRENT_TIMESTAMP
+                    WHERE stripe_subscription_id = ?
+                `).bind(invoice.subscription).run();
+                break;
             }
         }
-    `;
+        
+        return jsonResponse({ received: true }, 200, corsHeaders);
+    } catch (error) {
+        console.error('Stripe webhook error:', error);
+        return jsonResponse({ error: error.message }, 500, corsHeaders);
+    }
+}
 
-    const response = await fetch('https://api.github.com/graphql', {
+async function handleStripeCheckout(request, env, corsHeaders) {
+    if (!env.STRIPE_SECRET_KEY) {
+        return jsonResponse({ error: 'Stripe not configured' }, 503, corsHeaders);
+    }
+    
+    const { email, tier, successUrl, cancelUrl } = await request.json();
+    
+    if (!email) {
+        return jsonResponse({ error: 'Email required' }, 400, corsHeaders);
+    }
+    
+    // Price IDs - set these in your Cloudflare Worker environment variables
+    const priceId = tier === 'pro+' ? env.STRIPE_PRICE_PRO_PLUS : env.STRIPE_PRICE_PRO;
+    
+    if (!priceId) {
+        return jsonResponse({ error: 'Price not configured for tier: ' + tier }, 503, corsHeaders);
+    }
+    
+    const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${githubToken}`,
-            'Content-Type': 'application/json',
-            'User-Agent': 'Blazeycc-License-Verifier'
+            'Authorization': `Bearer ${env.STRIPE_SECRET_KEY}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify({ query })
+        body: new URLSearchParams({
+            'mode': 'subscription',
+            'customer_email': email.toLowerCase().trim(),
+            'line_items[0][price]': priceId,
+            'line_items[0][quantity]': '1',
+            'success_url': successUrl || 'https://blazeycc.com/success',
+            'cancel_url': cancelUrl || 'https://blazeycc.com/pricing',
+            'metadata[tier]': tier || 'pro',
+            'metadata[email]': email.toLowerCase().trim(),
+        }),
     });
-
-    if (!response.ok) {
-        console.error('GitHub API error:', response.status);
-        return false;
-    }
-
-    const data = await response.json();
-    const sponsors = data?.data?.user?.sponsorshipsAsMaintainer?.nodes || [];
     
-    return sponsors.some(s => {
-        const sponsorEmail = s.sponsorEntity?.email?.toLowerCase().trim();
-        return sponsorEmail === email;
-    });
+    const session = await response.json();
+    
+    if (session.error) {
+        return jsonResponse({ error: session.error.message }, 400, corsHeaders);
+    }
+    
+    return jsonResponse({ url: session.url, sessionId: session.id }, 200, corsHeaders);
 }
+
+async function handleStripePortal(request, env, corsHeaders) {
+    if (!env.STRIPE_SECRET_KEY) {
+        return jsonResponse({ error: 'Stripe not configured' }, 503, corsHeaders);
+    }
+    
+    const { email, returnUrl } = await request.json();
+    
+    if (!email) {
+        return jsonResponse({ error: 'Email required' }, 400, corsHeaders);
+    }
+    
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Get customer ID from DB
+    const subscription = await env.DB.prepare(
+        'SELECT stripe_customer_id FROM subscriptions WHERE email = ?'
+    ).bind(normalizedEmail).first();
+    
+    if (!subscription?.stripe_customer_id) {
+        return jsonResponse({ error: 'No subscription found for this email' }, 404, corsHeaders);
+    }
+    
+    const response = await fetch('https://api.stripe.com/v1/billing_portal/sessions', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${env.STRIPE_SECRET_KEY}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            'customer': subscription.stripe_customer_id,
+            'return_url': returnUrl || 'https://blazeycc.com',
+        }),
+    });
+    
+    const session = await response.json();
+    
+    if (session.error) {
+        return jsonResponse({ error: session.error.message }, 400, corsHeaders);
+    }
+    
+    return jsonResponse({ url: session.url }, 200, corsHeaders);
+}
+
+async function verifyStripeSignature(payload, signature, secret) {
+    if (!signature || !secret) return false;
+    
+    const parts = signature.split(',');
+    let timestamp = '';
+    let signatures = [];
+    
+    for (const part of parts) {
+        const [key, value] = part.split('=');
+        if (key === 't') timestamp = value;
+        if (key === 'v1') signatures.push(value);
+    }
+    
+    const signedPayload = `${timestamp}.${payload}`;
+    const encoder = new TextEncoder();
+    
+    const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+    );
+    
+    const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signedPayload));
+    const expectedSig = Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return signatures.some(s => s === expectedSig);
+}
+
+// =====================
+// UTILITY FUNCTIONS
+// =====================
 
 async function logAnalytics(db, eventType, email, licenseKey, request, metadata = null) {
     const cf = request.cf || {};

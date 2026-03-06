@@ -302,6 +302,7 @@ async function init() {
     document.getElementById('activateLicenseBtn')?.addEventListener('click', activateLicense);
     document.getElementById('deactivateLicenseBtn')?.addEventListener('click', deactivateLicense);
     document.getElementById('redeemPromoBtn')?.addEventListener('click', redeemPromoCode);
+    document.getElementById('subscribeBtn')?.addEventListener('click', openStripeCheckout);
 
     showNotification('Ready! Enter a URL to get started.', 'info');
     
@@ -1552,6 +1553,34 @@ async function redeemPromoCode() {
         }
     } catch (error) {
         showNotification('Error redeeming promo code: ' + error.message, 'error');
+    }
+}
+
+async function openStripeCheckout() {
+    const emailInput = document.getElementById('licenseEmail');
+    const email = emailInput?.value?.trim();
+    
+    if (!email) {
+        showNotification('Please enter your email first', 'error');
+        emailInput?.focus();
+        return;
+    }
+    
+    try {
+        showNotification('Opening checkout...', 'info');
+        const result = await window.electronAPI.createStripeCheckout(email, 'pro');
+        
+        if (result.url) {
+            // Open Stripe checkout in default browser
+            window.electronAPI.openExternal(result.url);
+            showNotification('Checkout opened in your browser', 'success');
+        } else if (result.error) {
+            showNotification(result.error, 'error');
+        }
+    } catch (error) {
+        // Fallback to website
+        window.electronAPI.openExternal('https://blazeycc.com/pricing');
+        showNotification('Opening pricing page...', 'info');
     }
 }
 

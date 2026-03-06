@@ -42,6 +42,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getLicenseTier: () => ipcRenderer.invoke('get-license-tier'),
     redeemPromo: (email, code) => ipcRenderer.invoke('redeem-promo', { email, code }),
     trackUsage: (action, metadata) => ipcRenderer.invoke('track-usage', { action, metadata }),
+    createStripeCheckout: (email, tier) => ipcRenderer.invoke('create-stripe-checkout', { email, tier }),
+    openStripePortal: (email) => ipcRenderer.invoke('open-stripe-portal', { email }),
     
     // Batch recordings (Pro)
     getBatchUrls: () => ipcRenderer.invoke('get-batch-urls'),

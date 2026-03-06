@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing - Blazeycc Pro</title>
+    <meta name="description" content="Choose your Blazeycc plan - Pro or Pro+ subscription">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .pricing-hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 6rem 2rem 4rem;
+            text-align: center;
+        }
+
+        .pricing-hero h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .pricing-hero .subtitle {
+            color: var(--text-muted);
+            font-size: 1.25rem;
+            margin-bottom: 3rem;
+            max-width: 600px;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .pricing-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2.5rem;
+            text-align: left;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .pricing-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow);
+        }
+
+        .pricing-card.popular {
+            border-color: var(--primary);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+        }
+
+        .pricing-card.popular::before {
+            content: 'Most Popular';
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--gradient);
+            color: white;
+            padding: 0.25rem 1rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .plan-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .plan-price {
+            display: flex;
+            align-items: baseline;
+            gap: 0.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .price-amount {
+            font-size: 3rem;
+            font-weight: 700;
+        }
+
+        .price-period {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        .plan-description {
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            min-height: 3rem;
+        }
+
+        .features-list {
+            list-style: none;
+            margin-bottom: 2rem;
+        }
+
+        .features-list li {
+            padding: 0.75rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .features-list li:last-child {
+            border-bottom: none;
+        }
+
+        .feature-check {
+            color: #22c55e;
+            font-weight: bold;
+        }
+
+        .subscribe-btn {
+            display: block;
+            width: 100%;
+            padding: 1rem;
+            background: var(--gradient);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .subscribe-btn:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .subscribe-btn.secondary {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+        }
+
+        .subscribe-btn.secondary:hover {
+            border-color: var(--primary);
+        }
+
+        .free-tier {
+            margin-top: 3rem;
+            padding: 2rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        .free-tier h3 {
+            margin-bottom: 0.5rem;
+        }
+
+        .free-tier p {
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .free-features {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .free-feature {
+            background: var(--bg-elevated);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 3rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--text);
+        }
+
+        .guarantee {
+            margin-top: 2rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .guarantee span {
+            color: #22c55e;
+        }
+
+        .existing-license {
+            margin-top: 2rem;
+            color: var(--text-muted);
+        }
+
+        .existing-license a {
+            color: var(--primary-light);
+            text-decoration: none;
+        }
+
+        .existing-license a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">
+                <span class="logo-icon">🎬</span>
+                <span>Blazeycc</span>
+            </a>
+            <div class="nav-links">
+                <a href="/#features">Features</a>
+                <a href="pricing.html">Pricing</a>
+                <a href="/#download">Download</a>
+                <a href="license.html">Get License</a>
+            </div>
+        </nav>
+    </header>
+
+    <section class="pricing-hero">
+        <h1>Choose Your Plan</h1>
+        <p class="subtitle">Unlock premium recording features with a simple monthly subscription</p>
+
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <div class="plan-icon">⭐</div>
+                <h2 class="plan-name">Pro</h2>
+                <div class="plan-price">
+                    <span class="price-amount">$5</span>
+                    <span class="price-period">/month</span>
+                </div>
+                <p class="plan-description">Everything you need for professional website recordings</p>
+                <ul class="features-list">
+                    <li><span class="feature-check">✓</span> No watermark</li>
+                    <li><span class="feature-check">✓</span> 4K export (up to 3840x2160)</li>
+                    <li><span class="feature-check">✓</span> Custom watermark</li>
+                    <li><span class="feature-check">✓</span> Fast encoding (2x speed)</li>
+                    <li><span class="feature-check">✓</span> Batch recording</li>
+                    <li><span class="feature-check">✓</span> Scheduled captures</li>
+                </ul>
+                <button class="subscribe-btn secondary" onclick="subscribe('pro')">
+                    Subscribe to Pro
+                </button>
+            </div>
+
+            <div class="pricing-card popular">
+                <div class="plan-icon">🚀</div>
+                <h2 class="plan-name">Pro+</h2>
+                <div class="plan-price">
+                    <span class="price-amount">$7</span>
+                    <span class="price-period">/month</span>
+                </div>
+                <p class="plan-description">For power users who want cloud features</p>
+                <ul class="features-list">
+                    <li><span class="feature-check">✓</span> All Pro features</li>
+                    <li><span class="feature-check">✓</span> 5GB cloud storage</li>
+                    <li><span class="feature-check">✓</span> Shareable video links</li>
+                    <li><span class="feature-check">✓</span> Video analytics</li>
+                    <li><span class="feature-check">✓</span> Custom thumbnails</li>
+                    <li><span class="feature-check">✓</span> Priority support</li>
+                </ul>
+                <button class="subscribe-btn" onclick="subscribe('pro_plus')">
+                    Subscribe to Pro+
+                </button>
+            </div>
+        </div>
+
+        <div class="free-tier">
+            <h3>🎉 Free Forever</h3>
+            <p>Start recording websites today with our generous free tier</p>
+            <div class="free-features">
+                <span class="free-feature">✓ Unlimited recordings</span>
+                <span class="free-feature">✓ Up to 1080p</span>
+                <span class="free-feature">✓ MP4 & WebM</span>
+                <span class="free-feature">✓ Custom scroll timing</span>
+            </div>
+        </div>
+
+        <p class="guarantee"><span>🔒</span> Cancel anytime. No questions asked.</p>
+        
+        <p class="existing-license">Already subscribed? <a href="license.html">Get your license key →</a></p>
+
+        <a href="/" class="back-link">← Back to Blazeycc</a>
+    </section>
+
+    <script>
+        const WORKER_URL = 'https://blazeycc-license.kennethhy-me.workers.dev';
+
+        async function subscribe(tier) {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Redirecting...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`${WORKER_URL}/stripe/checkout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        tier,
+                        success_url: window.location.origin + '/license.html?success=true',
+                        cancel_url: window.location.href
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    throw new Error(data.error || 'Failed to create checkout session');
+                }
+            } catch (error) {
+                console.error('Checkout error:', error);
+                alert('Unable to start checkout. Please try again later.');
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

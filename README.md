@@ -5,9 +5,6 @@
     <img src="build/icon.png" alt="Blazeycc Logo" width="512" height="512">
   </picture>
 </p>
-
-<h1 align="center">Blazeycc</h1>
-
 <p align="center">
   <strong>Record any website as video</strong><br>
   Capture demos, tutorials, and presentations as high-quality MP4, WebM, or GIF

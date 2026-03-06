@@ -795,7 +795,7 @@ function generateExpectedKey(email) {
     return hash.match(/.{1,8}/g).join('-');
 }
 
-// Validate license key using HMAC (GitHub Sponsors)
+// Validate license key using HMAC (Stripe subscription)
 function validateLicenseKey(email, key) {
     if (!email || !key) return false;
     const expectedKey = generateExpectedKey(email);

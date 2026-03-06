@@ -66,11 +66,11 @@ Everything in Pro, plus cloud storage for your recordings:
 ## 🚀 How It Works
 
 1. **Download Blazeycc** from the [releases page](https://github.com/blazeycc/Blazeycc/releases)
-2. **Become a sponsor** at your preferred tier
-3. **Enter your sponsor email** in the app settings
+2. **Subscribe** at [blazeycc.com/pricing](https://blazeycc.com/pricing.html)
+3. **Enter your email** in the app settings
 4. **Click "Activate License"** - your Pro/Pro+ features unlock instantly!
 
-Your license is tied to your GitHub Sponsors email. As long as you're an active sponsor, you'll have access to all the features in your tier.
+Your license is tied to your subscription email. As long as you have an active subscription, you'll have access to all the features in your tier.
 
 ---
 
@@ -83,4 +83,4 @@ Your license is tied to your GitHub Sponsors email. As long as you're an active 
 
 **Thank you for supporting Blazeycc! 💜**
 
-[![Sponsor](https://img.shields.io/badge/Sponsor-💜-ea4aaa?style=for-the-badge)](https://github.com/sponsors/theKennethy)
+[![Subscribe](https://img.shields.io/badge/Subscribe-Pro-ea4aaa?style=for-the-badge)](https://blazeycc.com/pricing.html)

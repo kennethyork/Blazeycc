@@ -86,17 +86,18 @@ The license API now supports:
 | `SENDGRID_API_KEY` | No | For sending license emails |
 | `FROM_EMAIL` | No | Sender email (default: noreply@blazey.cc) |
 
-## Manual Delivery
+## Manual License Key
 
-To manually deliver a license key:
+To manually create a license for a user, use the admin dashboard at:
+`https://your-worker.workers.dev/admin`
 
+Or call the API directly:
 ```bash
-gh workflow run sponsor-license.yml \
-  -f sponsor_login=username \
-  -f sponsor_email=user@example.com
+curl -X POST https://your-worker.workers.dev/admin/emails/add \
+  -H "Authorization: Bearer YOUR_ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "tier": "pro"}'
 ```
-
-## Environment Variables Reference
 
 | Variable         | Required | Description                        |
 | ---------------- | -------- | ---------------------------------- |

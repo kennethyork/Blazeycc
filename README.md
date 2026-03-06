@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sponsors/theKennethy"><img src="https://img.shields.io/badge/Sponsor-💜-ea4aaa?style=for-the-badge" alt="Sponsor"></a>
+  <a href="https://blazeycc.com/pricing.html"><img src="https://img.shields.io/badge/Subscribe-Pro-ea4aaa?style=for-the-badge" alt="Subscribe"></a>
 </p>
 
 ---
@@ -110,17 +110,17 @@ Unlock Pro features and support ongoing development:
 <td align="center" width="50%">
 <h3>☕ Pro — $5/mo</h3>
 <p>Remove watermarks, 4K export, cloud sync, batch recording, custom watermarks, scheduled recordings</p>
-<a href="https://github.com/sponsors/theKennethy">Become a Sponsor →</a>
+<a href="https://blazeycc.com/pricing.html">Subscribe →</a>
 </td>
 <td align="center" width="50%">
 <h3>☁️ Pro+ — $7/mo</h3>
 <p>Everything in Pro, plus 5GB cloud storage, shareable links, cloud preview, export to YouTube/Vimeo</p>
-<a href="https://github.com/sponsors/theKennethy">Become a Sponsor →</a>
+<a href="https://blazeycc.com/pricing.html">Subscribe →</a>
 </td>
 </tr>
 </table>
 
-**How to activate:** Settings → Enter your sponsor email → Click "Activate License"
+**How to activate:** Settings → Enter your email → Click "Activate License"
 
 ---
 
@@ -158,7 +158,7 @@ npm run build:mac     # macOS (requires macOS)
 ├── index.html       # Main UI
 ├── preload.js       # IPC bridge
 ├── workers/         # Cloudflare Workers (license API)
-├── webhook-relay/   # GitHub Sponsors webhook handler
+├── webhook-relay/   # Stripe webhook handler
 └── docs/            # Marketing site (blazeycc.com)
 ```
 

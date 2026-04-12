@@ -55,7 +55,7 @@ jobs:
           echo "license_tier=$LICENSE_TIER" >> $GITHUB_OUTPUT
       
       - name: Create Issue with License Key for Sponsor
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const login = '${{ steps.sponsor.outputs.login }}';

@@ -1,0 +1,1161 @@
+const { app, BrowserWindow, ipcMain, desktopCapturer, dialog, webContents, session, shell } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const ffmpeg = require('fluent-ffmpeg');
+const Store = require('electron-store').default || require('electron-store');
+const crypto = require('crypto');
+const { autoUpdater } = require('electron-updater');
+
+// Configure auto-updater
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+// License API configuration
+const LICENSE_SECRET = process.env.LICENSE_SECRET || '4f6fab93b5f0bfb47f3431ab19b230994e94cc946d479e27cf82b1b85c7aaee3';
+const LICENSE_API_URL = 'https://blazeycc-license.kennethhy-me.workers.dev';
+
+// Get watermark logo path
+function getWatermarkLogoPath() {
+    if (app.isPackaged) {
+        const logoPath = path.join(process.resourcesPath, 'watermark.png');
+        if (fs.existsSync(logoPath)) {
+            return logoPath;
+        }
+    }
+    // Dev mode - use local file
+    const devPath = path.join(__dirname, 'watermark.png');
+    if (fs.existsSync(devPath)) {
+        return devPath;
+    }
+    return null;
+}
+
+// Get watermark position coordinates
+function getWatermarkPosition(position) {
+    const positions = {
+        'bottom-left': { x: '10', y: 'h-35' },
+        'bottom-right': { x: 'w-tw-10', y: 'h-35' },
+        'top-left': { x: '10', y: '10' },
+        'top-right': { x: 'w-tw-10', y: '10' }
+    };
+    return positions[position] || positions['bottom-left'];
+}
+
+// Get ffmpeg path - handle both dev and packaged scenarios
+function getFFmpegPath() {
+    let ffmpegPath;
+    
+    // When packaged, check extraResources first
+    if (app.isPackaged) {
+        const extraResourcesPath = path.join(process.resourcesPath, 'ffmpeg');
+        const extraResourcesPathExe = path.join(process.resourcesPath, 'ffmpeg.exe');
+        
+        if (fs.existsSync(extraResourcesPath)) {
+            console.log('Using extraResources ffmpeg:', extraResourcesPath);
+            return extraResourcesPath;
+        }
+        if (fs.existsSync(extraResourcesPathExe)) {
+            console.log('Using extraResources ffmpeg:', extraResourcesPathExe);
+            return extraResourcesPathExe;
+        }
+    }
+    
+    try {
+        ffmpegPath = require('ffmpeg-static');
+    } catch (e) {
+        console.error('Failed to load ffmpeg-static:', e);
+        return null;
+    }
+    
+    // When packaged, ffmpeg-static is unpacked from asar
+    if (app.isPackaged) {
+        // Handle various path formats
+        if (ffmpegPath && ffmpegPath.includes('app.asar')) {
+            ffmpegPath = ffmpegPath.replace('app.asar', 'app.asar.unpacked');
+        }
+        
+        // Verify the file exists
+        if (!fs.existsSync(ffmpegPath)) {
+            // Try alternative paths
+            const alternatives = [
+                path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg'),
+                path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
+                path.join(__dirname, '..', 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg'),
+                path.join(__dirname, '..', 'app.asar.unpacked', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe'),
+                path.join(process.resourcesPath, 'ffmpeg'),
+                path.join(process.resourcesPath, 'ffmpeg.exe')
+            ];
+            
+            for (const alt of alternatives) {
+                if (fs.existsSync(alt)) {
+                    ffmpegPath = alt;
+                    break;
+                }
+            }
+        }
+    }
+    
+    console.log('FFmpeg path:', ffmpegPath);
+    console.log('FFmpeg exists:', ffmpegPath ? fs.existsSync(ffmpegPath) : false);
+    
+    return ffmpegPath;
+}
+
+// Force CPU-only rendering and disable hardware video encoding
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-compositing');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-accelerated-video-decode');
+app.commandLine.appendSwitch('disable-accelerated-video-encode');
+
+// Set ffmpeg path after app is ready
+app.on('ready', () => {
+    ffmpeg.setFfmpegPath(getFFmpegPath());
+});
+
+// Initialize store for settings, bookmarks, and history
+const store = new Store({
+    defaults: {
+        savePath: path.join(os.homedir(), 'Downloads'),
+        bookmarks: [],
+        history: [],
+        theme: 'dark'
+    }
+});
+
+let mainWindow;
+
+function createWindow() {
+    mainWindow = new BrowserWindow({
+        width: 1400,
+        height: 900,
+        minWidth: 900,
+        minHeight: 700,
+        backgroundColor: '#1a1a2e',
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js'),
+            webviewTag: true
+        },
+        title: 'Blazeycc'
+    });
+
+    // Load the app - vite build goes to dist/, dev server runs differently
+    if (app.isPackaged) {
+        mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+    } else {
+        // In development, load from dist after vite build
+        mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+    }
+    
+    // Log when page loads successfully
+    mainWindow.webContents.on('did-finish-load', () => {
+        console.log('Page loaded successfully');
+    });
+    
+    // Handle certificate errors for webview
+    session.defaultSession.setCertificateVerifyProc((request, callback) => {
+        // Accept all certificates (for webview sites)
+        callback(0);
+    });
+    
+    // Debug: show error if page fails to load
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDesc, validatedURL) => {
+        console.error('Failed to load:', errorCode, errorDesc, validatedURL);
+    });
+    
+    // F12 to open DevTools
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'F12') {
+            mainWindow.webContents.toggleDevTools();
+        }
+    });
+}
+
+// Get the webview's webContents ID for capture
+ipcMain.handle('get-webview-source', async (event, webviewId) => {
+    try {
+        const sources = await desktopCapturer.getSources({
+            types: ['window'],
+            thumbnailSize: { width: 1, height: 1 }
+        });
+        
+        // Find the main window source
+        const mainWindowSource = sources.find(s => 
+            s.name === 'Blazeycc' || s.name.includes('Blazeycc')
+        );
+        
+        if (mainWindowSource) {
+            return { success: true, sourceId: mainWindowSource.id };
+        }
+        
+        // Fallback to first window
+        if (sources.length > 0) {
+            return { success: true, sourceId: sources[0].id };
+        }
+        
+        return { success: false, error: 'No source found' };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Save video file (with MP4/GIF conversion and resize)
+ipcMain.handle('save-video', async (event, { filename, data, format, quality, width, height, proSettings }) => {
+    // All users get Pro features (no license required)
+    const settings = proSettings || {};
+    const useFastEncode = settings.fastEncode;
+    const customWatermark = settings.customWatermark;
+    const shouldAddWatermark = false; // No watermark for any users
+    
+    try {
+        const savePath = store.get('savePath');
+        
+        // Ensure save directory exists
+        if (!fs.existsSync(savePath)) {
+            fs.mkdirSync(savePath, { recursive: true });
+        }
+
+        // Sanitize filename
+        const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const buffer = Buffer.from(data);
+        
+        // If no format conversion (e.g., screenshots), save directly
+        if (!format || format === 'raw') {
+            let finalPath = path.join(savePath, safeFilename);
+            
+            // Handle duplicate filenames
+            if (fs.existsSync(finalPath)) {
+                const timestamp = Date.now();
+                const ext = path.extname(safeFilename);
+                const name = path.basename(safeFilename, ext);
+                finalPath = path.join(savePath, `${name}-${timestamp}${ext}`);
+            }
+            
+            fs.writeFileSync(finalPath, buffer);
+            return { success: true, path: finalPath };
+        }
+
+        // Write WebM first for conversion (use temp suffix to avoid conflict)
+        const tempWebmPath = path.join(savePath, safeFilename.replace(/\.(mp4|gif|webm)$/, '_temp.webm'));
+        fs.writeFileSync(tempWebmPath, buffer);
+
+        // Quality presets (CRF: lower = better quality, larger file)
+        const crfValues = { 'low': 28, 'medium': 23, 'high': 18, 'ultra': 15 };
+        const crf = crfValues[quality] || 23;
+
+        // Build output path
+        const outputExt = format === 'gif' ? '.gif' : format === 'webm' ? '.webm' : '.mp4';
+        const outputFilename = safeFilename.replace(/\.(webm|mp4|gif)$/, outputExt);
+        let outputPath = path.join(savePath, outputFilename);
+        
+        // WebM: if no resize needed, just rename the temp file
+        if (format === 'webm' && !width && !height) {
+            if (fs.existsSync(outputPath)) {
+                const timestamp = Date.now();
+                const name = path.basename(outputFilename, outputExt);
+                outputPath = path.join(savePath, `${name}-${timestamp}${outputExt}`);
+            }
+            fs.renameSync(tempWebmPath, outputPath);
+            return { success: true, path: outputPath };
+        }
+        
+        // Handle duplicate filenames
+        if (fs.existsSync(outputPath)) {
+            const timestamp = Date.now();
+            const name = path.basename(outputFilename, outputExt);
+            outputPath = path.join(savePath, `${name}-${timestamp}${outputExt}`);
+        }
+
+        return new Promise((resolve) => {
+            let cmd = ffmpeg(tempWebmPath);
+            let duration = 0;
+            
+            // Get duration first for progress calculation
+            cmd.ffprobe(tempWebmPath, (err, metadata) => {
+                if (metadata && metadata.format) {
+                    duration = metadata.format.duration || 0;
+                }
+            });
+            
+            if (format === 'gif') {
+                // GIF conversion with palette generation for better quality
+                const fps = quality === 'ultra' ? 15 : quality === 'high' ? 12 : quality === 'medium' ? 10 : 8;
+                let filters = `fps=${fps}`;
+                
+                if (width && height) {
+                    filters += `,scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
+                }
+                
+                // Add watermark for free users (before palette generation)
+                if (shouldAddWatermark) {
+                    // Text watermark - semi-transparent in bottom-left corner
+                    filters += `,drawtext=text='Blazeycc':fontsize=24:fontcolor=white@0.5:x=10:y=h-35:shadowcolor=black@0.3:shadowx=1:shadowy=1`;
+                }
+                
+                filters += ',split[s0][s1];[s0]palettegen=max_colors=256:stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5';
+                
+                cmd.outputOptions([`-vf ${filters}`, '-loop 0']);
+            } else if (format === 'webm') {
+                // WebM with resize
+                const outputOptions = [
+                    '-c:v libvpx-vp9',
+                    `-crf ${crf}`,
+                    '-b:v 0',
+                    useFastEncode ? '-deadline realtime -cpu-used 8' : '-deadline good -cpu-used 4'
+                ];
+                
+                let vfFilters = [];
+                
+                if (width && height) {
+                    vfFilters.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`);
+                }
+                
+                // Add watermark
+                if (shouldAddWatermark) {
+                    vfFilters.push(`drawtext=text='Blazeycc':fontsize=24:fontcolor=white@0.5:x=10:y=h-35:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
+                } else if (customWatermark && customWatermark.type === 'text' && customWatermark.text) {
+                    const pos = getWatermarkPosition(customWatermark.position || 'bottom-left');
+                    vfFilters.push(`drawtext=text='${customWatermark.text.replace(/'/g, "\\'").replace(/:/g, "\\:")}':fontsize=20:fontcolor=white@0.7:x=${pos.x}:y=${pos.y}:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
+                }
+                
+                if (vfFilters.length > 0) {
+                    outputOptions.push(`-vf ${vfFilters.join(',')}`);
+                }
+                
+                cmd.outputOptions(outputOptions);
+            } else {
+                // MP4 conversion
+                const preset = useFastEncode ? 'ultrafast' : 'medium';
+                const outputOptions = [
+                    '-c:v libx264',
+                    `-preset ${preset}`,
+                    `-crf ${crf}`,
+                    '-pix_fmt yuv420p',
+                    '-movflags +faststart'
+                ];
+                
+                let vfFilters = [];
+                
+                if (width && height) {
+                    vfFilters.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`);
+                }
+                
+                // Add watermark
+                if (shouldAddWatermark) {
+                    vfFilters.push(`drawtext=text='Blazeycc':fontsize=24:fontcolor=white@0.5:x=10:y=h-35:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
+                } else if (customWatermark && customWatermark.type === 'text' && customWatermark.text) {
+                    const pos = getWatermarkPosition(customWatermark.position || 'bottom-left');
+                    vfFilters.push(`drawtext=text='${customWatermark.text.replace(/'/g, "\\'").replace(/:/g, "\\:")}':fontsize=20:fontcolor=white@0.7:x=${pos.x}:y=${pos.y}:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
+                }
+                
+                if (vfFilters.length > 0) {
+                    outputOptions.push(`-vf ${vfFilters.join(',')}`);
+                }
+                
+                cmd.outputOptions(outputOptions);
+            }
+            
+            cmd.output(outputPath)
+                .on('progress', (progress) => {
+                    // Send progress to renderer
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        const percent = progress.percent || 0;
+                        mainWindow.webContents.send('ffmpeg-progress', { percent: Math.round(percent) });
+                    }
+                })
+                .on('end', () => {
+                    // Remove temporary WebM file
+                    try { fs.unlinkSync(tempWebmPath); } catch (e) {}
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('ffmpeg-progress', { percent: 100, done: true });
+                    }
+                    
+                    // Track video creation
+                    trackUsage('video_created', { format, quality });
+                    
+                    resolve({ success: true, path: outputPath });
+                })
+                .run();
+        });
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// IndexedDB storage handlers - forward to renderer process
+// The renderer will handle IndexedDB directly via the preload API
+
+// Bookmarks management - use electron-store for now (can migrate later)
+ipcMain.handle('get-bookmarks', async () => {
+    return [];
+});
+
+ipcMain.handle('add-bookmark', async (event, { url, title, favicon }) => {
+    return [];
+});
+
+ipcMain.handle('remove-bookmark', async (event, url) => {
+    return [];
+});
+
+// Recording history management - use electron-store for now
+ipcMain.handle('get-history', async () => {
+    return store.get('history', []);
+});
+
+ipcMain.handle('add-history', async (event, record) => {
+    const history = store.get('history', []);
+    const newRecord = { ...record, recordedAt: Date.now() };
+    history.unshift(newRecord);
+    if (history.length > 50) history.pop();
+    store.set('history', history);
+    return history;
+});
+
+ipcMain.handle('clear-history', async () => {
+    store.set('history', []);
+    return [];
+});
+
+ipcMain.handle('delete-history-item', async (event, filePath) => {
+    const history = store.get('history', []);
+    const newHistory = history.filter(h => h.path !== filePath);
+    store.set('history', newHistory);
+    return newHistory;
+});
+
+// Export to YouTube - opens YouTube Studio upload page
+ipcMain.handle('export-to-youtube', async (event, filePath) => {
+    const { shell } = require('electron');
+    // Open YouTube Studio upload page - user will manually upload
+    // In the future, this could use YouTube API with OAuth
+    shell.openExternal('https://studio.youtube.com/channel/upload');
+    shell.showItemInFolder(filePath);
+    return { success: true, message: 'YouTube Studio opened. Drag your video to upload.' };
+});
+
+// Export to Vimeo - opens Vimeo upload page
+ipcMain.handle('export-to-vimeo', async (event, filePath) => {
+    const { shell } = require('electron');
+    // Open Vimeo upload page - user will manually upload
+    shell.openExternal('https://vimeo.com/upload');
+    shell.showItemInFolder(filePath);
+    return { success: true, message: 'Vimeo opened. Drag your video to upload.' };
+});
+
+// Copy to clipboard
+ipcMain.handle('copy-to-clipboard', async (event, text) => {
+    const { clipboard } = require('electron');
+    clipboard.writeText(text);
+    return { success: true };
+});
+
+// Save path management
+ipcMain.handle('get-save-path', async () => {
+    return store.get('savePath');
+});
+
+ipcMain.handle('set-save-path', async (event, newPath) => {
+    store.set('savePath', newPath);
+    return newPath;
+});
+
+ipcMain.handle('select-save-folder', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory', 'createDirectory'],
+        defaultPath: store.get('savePath')
+    });
+    
+    if (!result.canceled && result.filePaths.length > 0) {
+        const newPath = result.filePaths[0];
+        store.set('savePath', newPath);
+        return { success: true, path: newPath };
+    }
+    return { success: false };
+});
+
+// Open file in system file manager
+ipcMain.handle('open-in-folder', async (event, filePath) => {
+    const { shell } = require('electron');
+    shell.showItemInFolder(filePath);
+    return { success: true };
+});
+
+// Theme management
+ipcMain.handle('get-theme', async () => {
+    return store.get('theme', 'dark');
+});
+
+ipcMain.handle('set-theme', async (event, theme) => {
+    store.set('theme', theme);
+    return theme;
+});
+
+// License management
+function generateExpectedKey(email) {
+    const normalizedEmail = email.toLowerCase().trim();
+    const hash = crypto.createHmac('sha256', LICENSE_SECRET)
+        .update(normalizedEmail)
+        .digest('hex')
+        .substring(0, 32)
+        .toUpperCase();
+    return hash.match(/.{1,8}/g).join('-');
+}
+
+// Validate license key using HMAC (Stripe subscription)
+function validateLicenseKey(email, key) {
+    if (!email || !key) return false;
+    const expectedKey = generateExpectedKey(email);
+    const normalizedKey = key.toUpperCase().replace(/\s/g, '').replace(/-/g, '');
+    const normalizedExpected = expectedKey.toUpperCase().replace(/-/g, '');
+    // Check both full key and first 16 chars (XXXX-XXXX-XXXX-XXXX format)
+    return normalizedKey === normalizedExpected || 
+           normalizedKey === normalizedExpected.slice(0, 16) ||
+           normalizedKey.slice(0, 16) === normalizedExpected.slice(0, 16);
+}
+
+// Online license validation (checks revocation)
+async function validateLicenseOnline(email, licenseKey) {
+    try {
+        const response = await fetch(`${LICENSE_API_URL}/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, licenseKey })
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Online validation failed:', error);
+        // Fallback to local validation if offline
+        return { valid: validateLicenseKey(email, licenseKey), offline: true };
+    }
+}
+
+// Track usage (video created, export, etc.)
+async function trackUsage(action, metadata = {}) {
+    try {
+        const license = store.get('license', null);
+        await fetch(`${LICENSE_API_URL}/track`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license?.email || null,
+                licenseKey: license?.key || null,
+                action,
+                metadata: {
+                    ...metadata,
+                    platform: process.platform,
+                    appVersion: app.getVersion()
+                }
+            })
+        });
+    } catch (error) {
+        // Silent fail - don't interrupt user experience
+        console.error('Usage tracking failed:', error);
+    }
+}
+
+// Redeem promo code
+async function redeemPromoCode(email, code) {
+    try {
+        const response = await fetch(`${LICENSE_API_URL}/redeem`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, code })
+        });
+        return await response.json();
+    } catch (error) {
+        return { error: 'Network error', message: error.message };
+    }
+}
+
+// License management - always unlocked (no auth/payment)
+ipcMain.handle('get-license', async () => {
+    return { email: 'free@user', key: 'unlocked', isValid: true };
+});
+
+ipcMain.handle('set-license', async () => {
+    return { success: true, message: 'All features unlocked!' };
+});
+
+ipcMain.handle('validate-license', async () => {
+    return true;
+});
+
+ipcMain.handle('clear-license', async () => {
+    return { success: true };
+});
+
+ipcMain.handle('redeem-promo', async () => {
+    return { success: true, message: 'All features unlocked!' };
+});
+
+ipcMain.handle('create-stripe-checkout', async () => {
+    return { error: 'Payments disabled' };
+});
+
+ipcMain.handle('open-stripe-portal', async () => {
+    return { error: 'Payments disabled' };
+});
+
+// Track usage (optional analytics)
+ipcMain.handle('track-usage', async () => {
+    return { success: true };
+});
+
+// All users are Pro
+ipcMain.handle('is-pro-licensed', async () => {
+    return true;
+});
+
+ipcMain.handle('is-pro-plus-licensed', async () => {
+    return true;
+});
+
+ipcMain.handle('get-license-tier', async () => {
+    return 'pro';
+});
+
+// Scheduled recordings storage
+ipcMain.handle('get-scheduled-recordings', async () => {
+    return store.get('scheduledRecordings', []);
+});
+
+ipcMain.handle('add-scheduled-recording', async (event, schedule) => {
+    const schedules = store.get('scheduledRecordings', []);
+    const newSchedule = {
+        id: Date.now().toString(),
+        ...schedule,
+        createdAt: new Date().toISOString()
+    };
+    schedules.push(newSchedule);
+    store.set('scheduledRecordings', schedules);
+    return schedules;
+});
+
+ipcMain.handle('remove-scheduled-recording', async (event, id) => {
+    const schedules = store.get('scheduledRecordings', []).filter(s => s.id !== id);
+    store.set('scheduledRecordings', schedules);
+    return schedules;
+});
+
+// Batch URLs storage
+ipcMain.handle('get-batch-urls', async () => {
+    return store.get('batchUrls', []);
+});
+
+ipcMain.handle('set-batch-urls', async (event, urls) => {
+    store.set('batchUrls', urls);
+    return urls;
+});
+
+// Pro settings: Custom watermark
+ipcMain.handle('get-custom-watermark', async () => {
+    return store.get('customWatermark', { type: 'none', text: '', position: 'bottom-left', imagePath: null });
+});
+
+ipcMain.handle('set-custom-watermark', async (event, settings) => {
+    store.set('customWatermark', settings);
+    return settings;
+});
+
+// Pro settings: Fast encoding preference
+ipcMain.handle('get-fast-encode', async () => {
+    return store.get('fastEncode', false);
+});
+
+ipcMain.handle('set-fast-encode', async (event, enabled) => {
+    store.set('fastEncode', enabled);
+    return enabled;
+});
+
+// Pro settings: Cloud sync configuration
+ipcMain.handle('get-cloud-config', async () => {
+    return store.get('cloudConfig', { googleDrive: null, dropbox: null });
+});
+
+ipcMain.handle('set-cloud-config', async (event, config) => {
+    store.set('cloudConfig', config);
+    return config;
+});
+
+// Open external URL (for OAuth)
+ipcMain.handle('open-external', async (event, url) => {
+    shell.openExternal(url);
+    return true;
+});
+
+// Select watermark image
+ipcMain.handle('select-watermark-image', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openFile'],
+        filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif'] }]
+    });
+    
+    if (!result.canceled && result.filePaths.length > 0) {
+        return { success: true, path: result.filePaths[0] };
+    }
+    return { success: false };
+});
+
+app.whenReady().then(() => {
+    createWindow();
+    
+    // Check for updates after window is ready (delay to not block startup)
+    setTimeout(() => {
+        if (app.isPackaged) {
+            autoUpdater.checkForUpdates().catch(err => {
+                console.log('Update check failed:', err.message);
+            });
+        }
+    }, 3000);
+});
+
+// =====================
+// AUTO-UPDATE HANDLERS
+// =====================
+
+autoUpdater.on('checking-for-update', () => {
+    console.log('Checking for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+    console.log('Update available:', info.version);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-available', {
+            version: info.version,
+            releaseDate: info.releaseDate,
+            releaseNotes: info.releaseNotes
+        });
+    }
+});
+
+autoUpdater.on('update-not-available', () => {
+    console.log('App is up to date');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-not-available');
+    }
+});
+
+autoUpdater.on('download-progress', (progress) => {
+    console.log(`Download progress: ${Math.round(progress.percent)}%`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-download-progress', {
+            percent: progress.percent,
+            bytesPerSecond: progress.bytesPerSecond,
+            transferred: progress.transferred,
+            total: progress.total
+        });
+    }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    console.log('Update downloaded:', info.version);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-downloaded', {
+            version: info.version
+        });
+    }
+});
+
+autoUpdater.on('error', (err) => {
+    console.error('Auto-updater error:', err.message);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-error', { error: err.message });
+    }
+});
+
+// IPC handlers for auto-update
+ipcMain.handle('check-for-updates', async () => {
+    try {
+        const result = await autoUpdater.checkForUpdates();
+        return { success: true, updateInfo: result?.updateInfo };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('download-update', async () => {
+    try {
+        await autoUpdater.downloadUpdate();
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('install-update', () => {
+    autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
+});
+
+// Handle uncaught exceptions to prevent crashes
+// Canvas-based recording state
+let canvasRecordingSession = null;
+let pendingFrameWrites = 0;
+
+// Audio capture state
+let audioRecordingSession = null;
+
+// Audio enabled setting
+ipcMain.handle('get-audio-enabled', async () => {
+    return store.get('audioEnabled', false);
+});
+
+ipcMain.handle('set-audio-enabled', async (event, enabled) => {
+    store.set('audioEnabled', enabled);
+    return enabled;
+});
+
+// Start audio capture from webview
+ipcMain.handle('start-audio-capture', async (event, webContentsId) => {
+    try {
+        const tempDir = path.join(os.tmpdir(), `blazeycc-audio-${Date.now()}`);
+        fs.mkdirSync(tempDir, { recursive: true });
+        
+        audioRecordingSession = {
+            tempDir,
+            audioPath: path.join(tempDir, 'audio.webm'),
+            chunks: [],
+            startTime: Date.now()
+        };
+        
+        console.log('Audio recording started, temp dir:', tempDir);
+        return { success: true, audioPath: audioRecordingSession.audioPath };
+    } catch (error) {
+        console.error('Failed to start audio capture:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Save audio chunk
+ipcMain.handle('save-audio-chunk', async (event, chunkData) => {
+    if (!audioRecordingSession) {
+        return { success: false, error: 'No active audio session' };
+    }
+    
+    try {
+        const buffer = Buffer.from(chunkData, 'base64');
+        audioRecordingSession.chunks.push(buffer);
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to save audio chunk:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Stop audio capture and save file
+ipcMain.handle('stop-audio-capture', async () => {
+    if (!audioRecordingSession) {
+        return { success: false, error: 'No active audio session' };
+    }
+    
+    try {
+        // Combine all chunks and write to file
+        const audioBuffer = Buffer.concat(audioRecordingSession.chunks);
+        fs.writeFileSync(audioRecordingSession.audioPath, audioBuffer);
+        
+        console.log('Audio saved to:', audioRecordingSession.audioPath, 'size:', audioBuffer.length);
+        return { success: true, audioPath: audioRecordingSession.audioPath };
+    } catch (error) {
+        console.error('Failed to stop audio capture:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Clear audio session
+ipcMain.handle('cancel-audio-capture', async () => {
+    if (audioRecordingSession?.tempDir) {
+        try {
+            fs.rmSync(audioRecordingSession.tempDir, { recursive: true, force: true });
+        } catch (e) {}
+    }
+    audioRecordingSession = null;
+    return { success: true };
+});
+
+ipcMain.handle('start-canvas-recording', async () => {
+    try {
+        // Create temp directory for frames
+        const tempDir = path.join(os.tmpdir(), `blazeycc-recording-${Date.now()}`);
+        fs.mkdirSync(tempDir, { recursive: true });
+        
+        pendingFrameWrites = 0;
+        canvasRecordingSession = {
+            tempDir,
+            frameCount: 0,
+            startTime: Date.now(),
+            fps: 30
+        };
+        
+        console.log('Canvas recording started, temp dir:', tempDir);
+        return { success: true, sessionId: tempDir };
+    } catch (error) {
+        console.error('Failed to start canvas recording:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('capture-frame', async (event, frameData) => {
+    if (!canvasRecordingSession) {
+        return { success: false, error: 'No active recording session' };
+    }
+    
+    try {
+        const frameNumber = canvasRecordingSession.frameCount++;
+        const framePath = path.join(canvasRecordingSession.tempDir, `frame_${String(frameNumber).padStart(6, '0')}.png`);
+        
+        // frameData is base64 PNG data - use async write to avoid blocking
+        const base64Data = frameData.replace(/^data:image\/png;base64,/, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        // Track pending writes
+        pendingFrameWrites++;
+        fs.promises.writeFile(framePath, buffer)
+            .then(() => pendingFrameWrites--)
+            .catch(err => {
+                pendingFrameWrites--;
+                console.error('Frame write error:', err);
+            });
+        
+        return { success: true, frameNumber };
+    } catch (error) {
+        console.error('Failed to capture frame:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Capture the current webview/window frame
+ipcMain.handle('capture-webview-frame', async (event, webContentsId) => {
+    try {
+        let targetWebContents;
+        
+        // If webContentsId provided, capture that specific webContents (the webview)
+        if (webContentsId) {
+            const { webContents } = require('electron');
+            targetWebContents = webContents.fromId(webContentsId);
+        }
+        
+        // Fallback to main window
+        if (!targetWebContents && mainWindow) {
+            targetWebContents = mainWindow.webContents;
+        }
+        
+        if (!targetWebContents) {
+            return { success: false, error: 'No target to capture' };
+        }
+        
+        const image = await targetWebContents.capturePage();
+        const pngBuffer = image.toPNG();
+        const base64Data = 'data:image/png;base64,' + pngBuffer.toString('base64');
+        
+        return { success: true, data: base64Data };
+    } catch (error) {
+        console.error('Failed to capture webview frame:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, height, proSettings }) => {
+    if (!canvasRecordingSession || canvasRecordingSession.frameCount === 0) {
+        return { success: false, error: 'No frames captured' };
+    }
+    
+    try {
+        const { tempDir, frameCount, startTime, fps } = canvasRecordingSession;
+        const duration = (Date.now() - startTime) / 1000;
+        const actualFps = Math.round(frameCount / duration) || fps;
+        
+        console.log(`Canvas recording stopped: ${frameCount} frames in ${duration}s (${actualFps} fps)`);
+        
+        // Wait for all pending frame writes to complete (max 10 seconds)
+        let waitTime = 0;
+        while (pendingFrameWrites > 0 && waitTime < 10000) {
+            console.log(`Waiting for ${pendingFrameWrites} pending frame writes...`);
+            await new Promise(resolve => setTimeout(resolve, 200));
+            waitTime += 200;
+        }
+        console.log('All frame writes completed');
+        
+        // Generate output filename
+        const savePath = store.get('savePath', path.join(os.homedir(), 'Downloads'));
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const outputFormat = format || 'mp4';
+        const outputPath = path.join(savePath, `blazeycc_${timestamp}.${outputFormat}`);
+        
+        // Check Pro license
+        const license = store.get('license', null);
+        const isProLicensed = license && license.email && license.key && validateLicenseKey(license.email, license.key);
+        const settings = proSettings || {};
+        const useFastEncode = isProLicensed && settings.fastEncode;
+        const shouldAddWatermark = !isProLicensed; // Free users get watermark
+        
+        // Get watermark image path
+        const watermarkPath = getWatermarkLogoPath();
+        const hasWatermark = shouldAddWatermark && watermarkPath && fs.existsSync(watermarkPath);
+        
+        console.log('Watermark check:', { isProLicensed, shouldAddWatermark, hasWatermark, watermarkPath });
+        
+        // Build FFmpeg command
+        const inputPattern = path.join(tempDir, 'frame_%06d.png');
+        
+        // Check for audio file to merge
+        const audioPath = settings.audioPath;
+        const hasAudio = audioPath && fs.existsSync(audioPath);
+        
+        console.log('Audio merge check:', { hasAudio, audioPath });
+        
+        return new Promise((resolve, reject) => {
+            let command = ffmpeg()
+                .input(inputPattern)
+                .inputFPS(actualFps)
+                .fps(30);
+            
+            // Add audio input if available
+            if (hasAudio) {
+                command = command.input(audioPath);
+            }
+            
+            // Add watermark input if needed
+            if (hasWatermark) {
+                command = command.input(watermarkPath);
+            }
+            
+            // Build complex filter for resize + watermark
+            // Note: input indices shift when audio is added
+            const watermarkInputIdx = hasAudio ? 2 : 1;
+            
+            if (hasWatermark && width && height) {
+                // Both resize and watermark
+                command = command.complexFilter([
+                    `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2[scaled]`,
+                    `[scaled][${watermarkInputIdx}:v]overlay=10:H-h-10[out]`
+                ], 'out');
+            } else if (hasWatermark) {
+                // Watermark only (bottom-left corner)
+                command = command.complexFilter([
+                    `[0:v][${watermarkInputIdx}:v]overlay=10:H-h-10[out]`
+                ], 'out');
+            } else if (width && height) {
+                // Resize only
+                command = command.videoFilters([
+                    `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`
+                ]);
+            }
+            
+            // Output format settings
+            if (outputFormat === 'mp4') {
+                const outputOpts = [
+                    '-pix_fmt', 'yuv420p',
+                    '-preset', useFastEncode ? 'fast' : 'medium',
+                    '-crf', quality === 'high' ? '18' : quality === 'medium' ? '23' : '28'
+                ];
+                
+                // Add audio codec if we have audio
+                if (hasAudio) {
+                    outputOpts.push('-c:a', 'aac', '-b:a', '128k');
+                    outputOpts.push('-map', '0:v', '-map', '1:a');
+                    outputOpts.push('-shortest'); // End when shortest stream ends
+                }
+                
+                command = command
+                    .videoCodec('libx264')
+                    .outputOptions(outputOpts);
+            } else if (outputFormat === 'webm') {
+                const outputOpts = [
+                    '-crf', quality === 'high' ? '20' : quality === 'medium' ? '30' : '40',
+                    '-b:v', '0'
+                ];
+                
+                if (hasAudio) {
+                    outputOpts.push('-c:a', 'libopus', '-b:a', '128k');
+                    outputOpts.push('-map', '0:v', '-map', '1:a');
+                    outputOpts.push('-shortest');
+                }
+                
+                command = command
+                    .videoCodec('libvpx-vp9')
+                    .outputOptions(outputOpts);
+            } else if (outputFormat === 'gif') {
+                command = command
+                    .fps(15)
+                    .outputOptions(['-loop', '0']);
+                // GIF doesn't support audio
+            }
+            
+            command
+                .output(outputPath)
+                .on('progress', (progress) => {
+                    if (mainWindow) {
+                        mainWindow.webContents.send('ffmpeg-progress', {
+                            percent: progress.percent || 0
+                        });
+                    }
+                })
+                .on('end', () => {
+                    // Cleanup temp directories
+                    fs.rmSync(tempDir, { recursive: true, force: true });
+                    if (audioRecordingSession?.tempDir) {
+                        fs.rmSync(audioRecordingSession.tempDir, { recursive: true, force: true });
+                        audioRecordingSession = null;
+                    }
+                    canvasRecordingSession = null;
+                    
+                    console.log('Canvas recording saved to:', outputPath, hasAudio ? '(with audio)' : '');
+                    resolve({ success: true, filePath: outputPath });
+                })
+                .on('error', (err) => {
+                    console.error('FFmpeg error:', err);
+                    // Cleanup temp directories
+                    fs.rmSync(tempDir, { recursive: true, force: true });
+                    if (audioRecordingSession?.tempDir) {
+                        fs.rmSync(audioRecordingSession.tempDir, { recursive: true, force: true });
+                        audioRecordingSession = null;
+                    }
+                    canvasRecordingSession = null;
+                    
+                    reject({ success: false, error: err.message });
+                })
+                .run();
+        });
+    } catch (error) {
+        console.error('Failed to stop canvas recording:', error);
+        if (canvasRecordingSession?.tempDir) {
+            fs.rmSync(canvasRecordingSession.tempDir, { recursive: true, force: true });
+        }
+        canvasRecordingSession = null;
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('cancel-canvas-recording', async () => {
+    if (canvasRecordingSession?.tempDir) {
+        fs.rmSync(canvasRecordingSession.tempDir, { recursive: true, force: true });
+    }
+    canvasRecordingSession = null;
+    return { success: true };
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+});
+
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
+});
+
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+    }
+});

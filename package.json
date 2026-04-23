@@ -1,0 +1,114 @@
+{
+  "name": "blazeycc",
+  "version": "1.2.8",
+  "description": "Record any website as video",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron . --no-sandbox --disable-gpu --disable-software-rasterizer --disable-gpu-compositing",
+    "start:gpu": "electron . --enable-gpu",
+    "build": "vite build && electron-builder",
+    "build:linux": "vite build && electron-builder --linux",
+    "build:win": "vite build && electron-builder --win",
+    "dev": "vite",
+    "lint": "eslint . --ext .js,.jsx",
+    "lint:fix": "eslint . --ext .js,.jsx --fix"
+  },
+  "keywords": [
+    "screen-recording",
+    "video",
+    "electron"
+  ],
+  "author": {
+    "name": "theKennethy",
+    "email": "thekennethy@github.com"
+  },
+  "homepage": "https://github.com/blazeycc/Blazeycc",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blazeycc/Blazeycc.git"
+  },
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1",
+    "eslint": "^8.57.0",
+    "vite": "^6.2.3"
+  },
+  "dependencies": {
+    "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.3",
+    "ffmpeg-static": "^5.3.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "build": {
+    "appId": "com.thekennethy.blazeycc",
+    "productName": "Blazeycc",
+    "publish": {
+      "provider": "github",
+      "owner": "blazeycc",
+      "repo": "Blazeycc"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**/*",
+      "node_modules/@ffmpeg-installer/**/*"
+    ],
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js",
+      "package.json",
+      "node_modules/**/*",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!**/node_modules/*.d.ts",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!dist/**/*",
+      "!docs/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg",
+        "to": "ffmpeg"
+      },
+      {
+        "from": "watermark.png",
+        "to": "watermark.png"
+      }
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility",
+      "icon": "build/icon.png",
+      "maintainer": "kennethyork",
+      "artifactName": "${productName}.${ext}"
+    },
+"win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility",
+      "icon": "build/icon.png",
+      "maintainer": "kennethyork"
+    }
+  }
+}

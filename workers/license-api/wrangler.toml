@@ -1,0 +1,32 @@
+name = "blazeycc-license"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+STORAGE_LIMIT_MB = "5120"  # 5GB per user
+
+[[d1_databases]]
+binding = "DB"
+database_name = "blazeycc-licenses"
+database_id = "3112b81a-8a4d-410e-80db-623c2fe00087"
+
+# R2 Cloud Storage
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "blazeycc-recordings"
+
+# Secrets (set via wrangler secret put):
+# - LICENSE_SECRET: Your HMAC secret for generating keys
+# - ADMIN_KEY: Secret key for admin API endpoints
+# - STRIPE_SECRET_KEY: Stripe secret key (sk_live_xxx or sk_test_xxx)
+# - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret (whsec_xxx)
+#
+# Subscription prices:
+# - STRIPE_PRICE_PRO: Stripe Price ID for Pro tier ($5/mo)
+# - STRIPE_PRICE_PRO_PLUS: Stripe Price ID for Pro+ tier ($7/mo)
+# - STRIPE_PRICE_PRO_MAX: Stripe Price ID for Pro Max tier ($12/mo)
+#
+# Lifetime prices (one-time payments):
+# - STRIPE_PRICE_LIFETIME_PRO: Stripe Price ID for Lifetime Pro ($59)
+# - STRIPE_PRICE_LIFETIME_PRO_PLUS: Stripe Price ID for Lifetime Pro+ ($119)
+# - STRIPE_PRICE_LIFETIME_PRO_MAX: Stripe Price ID for Lifetime Pro Max ($199)

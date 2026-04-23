@@ -1,0 +1,19 @@
+/* Import existing styles */
+@import '../styles.css';
+
+:root {
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+}
+
+#root {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}

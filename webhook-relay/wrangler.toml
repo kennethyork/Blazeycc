@@ -1,0 +1,13 @@
+name = "blazeycc-stripe-webhook"
+main = "cloudflare-worker.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+FROM_EMAIL = "noreply@blazey.cc"
+
+# Add these secrets via wrangler:
+# wrangler secret put STRIPE_WEBHOOK_SECRET
+# wrangler secret put LICENSE_SECRET
+# wrangler secret put LICENSE_API_URL (optional)
+# wrangler secret put ADMIN_KEY (optional)
+# wrangler secret put SENDGRID_API_KEY (optional)

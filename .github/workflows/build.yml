@@ -2,6 +2,10 @@ name: Build and Release
 
 on:
   push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  push:
     tags:
       - 'v*'
   workflow_dispatch:
@@ -12,8 +16,29 @@ on:
         default: ''
 
 jobs:
-  build-linux:
+  lint:
     runs-on: ubuntu-latest
+    if: "!startsWith(github.ref, 'refs/tags/v')"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint --if-present
+
+  build-linux:
+    needs: [lint]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Checkout
         uses: actions/checkout@v4

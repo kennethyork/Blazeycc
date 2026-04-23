@@ -56,7 +56,7 @@
       "node_modules/ffmpeg-static/**/*",
       "node_modules/@ffmpeg-installer/**/*"
     ],
-    "files": [
+"files": [
       "dist/**/*",
       "main.js",
       "preload.js",
@@ -67,9 +67,8 @@
       "!**/node_modules/*.d.ts",
       "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
       "!.editorconfig",
-      "!**/._*",
+      "!**/_{*}",
       "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
-      "!dist/**/*",
       "!docs/**/*"
     ],
     "extraResources": [

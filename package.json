@@ -10,8 +10,8 @@
     "build:linux": "vite build && electron-builder --linux",
     "build:win": "vite build && electron-builder --win",
     "dev": "vite",
-    "lint": "eslint main.js preload.js app.js --ext .js",
-    "lint:fix": "eslint main.js preload.js app.js --ext .js --fix"
+    "lint": "eslint main.js preload.js --ext .js",
+    "lint:fix": "eslint main.js preload.js --ext .js --fix"
   },
   "keywords": [
     "screen-recording",

@@ -270,98 +270,7 @@
                     </div>
                 </div>
                 
-                <!-- Pro Features Section -->
-                <div class="pro-section">
-                    <div class="pro-header">
-                        <span class="pro-badge">PRO</span>
-                        <span>Premium Features</span>
-                    </div>
-                    <div class="setting-item pro-feature">
-                        <label>
-                            <input type="checkbox" id="removeWatermark" disabled>
-                            ✨ Remove Watermark
-                            <span class="pro-lock">🔒</span>
-                        </label>
-                    </div>
-                    <div class="setting-item pro-feature">
-                        <label>
-                            <input type="checkbox" id="enable4k" disabled>
-                            📺 4K Export (3840×2160)
-                            <span class="pro-lock">🔒</span>
-                        </label>
-                    </div>
-                    <div class="setting-item pro-feature">
-                        <label>
-                            <input type="checkbox" id="enableBatch" disabled>
-                            📋 Batch URL Recording
-                            <span class="pro-lock">🔒</span>
-                        </label>
-                    </div>
-                    <div class="setting-item pro-feature">
-                        <label>
-                            <input type="checkbox" id="enableSchedule" disabled>
-                            ⏰ Scheduled Recordings
-                            <span class="pro-lock">🔒</span>
-                        </label>
-                    </div>
-                    <div class="setting-item pro-feature">
-                        <label>
-                            <input type="checkbox" id="enableFastEncode" disabled>
-                            ⚡ Fast Encoding (2x speed)
-                            <span class="pro-lock">🔒</span>
-                        </label>
-                    </div>
-                    <div class="setting-item pro-feature">
-                        <label>
-                            <input type="checkbox" id="enableCustomWatermark" disabled>
-                            🎨 Custom Watermark
-                            <span class="pro-lock">🔒</span>
-                        </label>
-                    </div>
-                    <div class="setting-item pro-plus-feature">
-                        <label>
-                            <input type="checkbox" id="enableCloudSync" disabled>
-                            ☁️ Cloud Storage (5GB) 
-                            <span class="pro-plus-lock">Pro+</span>
-                        </label>
-                    </div>
-                    
-                    <!-- Custom Watermark Section (Pro) -->
-                    <div class="custom-watermark-section pro-feature-panel" id="customWatermarkSection" style="display: none;">
-                        <h4>🎨 Custom Watermark</h4>
-                        <div class="watermark-options">
-                            <label class="radio-label">
-                                <input type="radio" name="watermarkType" value="none" checked> No watermark
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="watermarkType" value="text"> Custom text
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="watermarkType" value="image"> Custom image
-                            </label>
-                        </div>
-                        <div class="watermark-text-options" id="watermarkTextOptions" style="display: none;">
-                            <input type="text" id="customWatermarkText" placeholder="Your watermark text" maxlength="30">
-                            <select id="watermarkPosition">
-                                <option value="bottom-left">Bottom Left</option>
-                                <option value="bottom-right">Bottom Right</option>
-                                <option value="top-left">Top Left</option>
-                                <option value="top-right">Top Right</option>
-                            </select>
-                        </div>
-                        <div class="watermark-image-options" id="watermarkImageOptions" style="display: none;">
-                            <button id="selectWatermarkImage" class="btn btn-small">📁 Choose Image</button>
-                            <span id="watermarkImageName">No image selected</span>
-                        </div>
-                    </div>
-                    
-                    <!-- Cloud Storage Section (Pro+) -->
-                    <div class="cloud-sync-section pro-plus-feature-panel" id="cloudSyncSection" style="display: none;">
-                        <h4>☁️ Blazeycc Cloud Storage <span class="pro-plus-badge">Pro+</span></h4>
-                        <p class="help-text">5GB cloud storage for your recordings. Upload and access from anywhere.</p>
-                        <div class="cloud-storage-info">
-                            <div class="storage-meter">
-                                <div class="storage-meter-fill" id="settingsStorageMeter" style="width: 0%;"></div>
+                
                             </div>
                             <p class="storage-text" id="settingsStorageText">Loading...</p>
                         </div>
@@ -372,11 +281,13 @@
                         </div>
                     </div>
                     
-                    <!-- Batch Recording Section (Pro) -->
-                    <div class="batch-section pro-feature-panel" id="batchSection" style="display: none;">
+                    <!-- Batch Recording Section -->
+                    <div class="batch-section" id="batchSection">
                         <h4>📋 Batch Recording</h4>
                         <p class="help-text">Enter one URL per line. Each will be recorded for the duration below.</p>
-                        <textarea id="batchUrls" placeholder="https://example.com&#10;https://another-site.com&#10;https://third-url.com" rows="5"></textarea>
+                        <textarea id="batchUrls" placeholder="https://example.com
+https://another-site.com
+https://third-url.com" rows="5"></textarea>
                         <div class="batch-settings">
                             <label>Record each for:
                                 <select id="batchDuration">
@@ -387,7 +298,7 @@
                                     <option value="300">5 minutes</option>
                                 </select>
                             </label>
-                            <button id="startBatchBtn" class="btn btn-pro">▶️ Start Batch</button>
+                            <button id="startBatchBtn" class="btn btn-primary">▶️ Start Batch</button>
                         </div>
                         <div class="batch-progress" id="batchProgress" style="display: none;">
                             <p><span id="batchCurrentNum">0</span> / <span id="batchTotalNum">0</span> recordings</p>
@@ -395,8 +306,8 @@
                         </div>
                     </div>
                     
-                    <!-- Scheduled Recording Section (Pro) -->
-                    <div class="schedule-section pro-feature-panel" id="scheduleSection" style="display: none;">
+                    <!-- Scheduled Recording Section -->
+                    <div class="schedule-section" id="scheduleSection">
                         <h4>⏰ Scheduled Recordings</h4>
                         <div class="schedule-form">
                             <input type="url" id="scheduleUrl" placeholder="URL to record">

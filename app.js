@@ -319,6 +319,11 @@ async function init() {
 
     // Apply initial viewport size for the default preset
     resizeBrowserViewport(elements.formatPreset.value);
+    
+    // Re-calculate viewport on window resize
+    window.addEventListener('resize', () => {
+        resizeBrowserViewport(elements.formatPreset.value);
+    });
 
     showNotification('Ready! Enter a URL to get started.', 'info');
 }
@@ -372,22 +377,33 @@ function resizeBrowserViewport(preset) {
     if (preset === 'custom') {
         elements.browserViewport.style.width = '100%';
         elements.browserViewport.style.height = '100%';
-        elements.browserViewport.style.maxWidth = '';
-        elements.browserViewport.style.maxHeight = '';
-        elements.browserViewport.style.aspectRatio = '';
         return;
     }
     
     const presetData = FORMAT_PRESETS[preset];
     if (!presetData) return;
     
-    // Use CSS aspect-ratio to fit the preset proportion inside the container
-    // while keeping the webview filling the available space for capture
-    elements.browserViewport.style.width = 'auto';
-    elements.browserViewport.style.height = 'auto';
-    elements.browserViewport.style.maxWidth = '100%';
-    elements.browserViewport.style.maxHeight = '100%';
-    elements.browserViewport.style.aspectRatio = `${presetData.width} / ${presetData.height}`;
+    // Calculate explicit pixel size to fit preset inside container
+    const containerWidth = elements.browserContainer.clientWidth;
+    const containerHeight = elements.browserContainer.clientHeight;
+    
+    if (containerWidth === 0 || containerHeight === 0) {
+        elements.browserViewport.style.width = '100%';
+        elements.browserViewport.style.height = '100%';
+        return;
+    }
+    
+    const scale = Math.min(
+        containerWidth / presetData.width,
+        containerHeight / presetData.height,
+        1
+    );
+    
+    const displayWidth = Math.max(Math.round(presetData.width * scale), 100);
+    const displayHeight = Math.max(Math.round(presetData.height * scale), 100);
+    
+    elements.browserViewport.style.width = displayWidth + 'px';
+    elements.browserViewport.style.height = displayHeight + 'px';
 }
 
 // Format URL
@@ -445,6 +461,13 @@ async function startRecording() {
         showNotification('Please load a website first', 'error');
         return;
     }
+    
+    // Verify webview has a visible size
+    const webviewRect = elements.webview.getBoundingClientRect();
+    if (webviewRect.width < 10 || webviewRect.height < 10) {
+        showNotification('Browser viewport is too small. Please resize the window or switch to Custom preset.', 'error');
+        return;
+    }
 
     try {
         // Start canvas-based recording (avoids SIGILL crashes with MediaRecorder)
@@ -472,8 +495,7 @@ async function startRecording() {
         // Start frame capture loop (~15fps to reduce freeze/lag)
         state.frameCapturePending = false;
         state.droppedFrames = 0;
-        // Get webview's webContentsId for direct capture
-        state.webviewWebContentsId = elements.webview.getWebContentsId ? elements.webview.getWebContentsId() : null;
+        state.frameCaptureFailCount = 0;
         
         state.frameCaptureInterval = setInterval(() => {
             if (!state.canvasRecordingActive) return;
@@ -485,19 +507,30 @@ async function startRecording() {
             
             state.frameCapturePending = true;
             
-            window.electronAPI.captureWebviewFrame(state.webviewWebContentsId)
-                .then(async frameResult => {
-                    if (frameResult.success && state.canvasRecordingActive) {
-                        // Merge annotations if any
-                        let frameData = frameResult.data;
-                        if (state.annotationEnabled && state.annotationHistory.length > 0) {
-                            frameData = await mergeAnnotationsWithFrame(frameResult.data);
-                        }
-                        return window.electronAPI.captureFrame(frameData);
+            // Capture directly from webview element (more reliable than main-process IPC)
+            elements.webview.capturePage()
+                .then(async image => {
+                    if (!state.canvasRecordingActive) return;
+                    
+                    const frameData = image.toDataURL();
+                    
+                    // Merge annotations if any
+                    let finalFrame = frameData;
+                    if (state.annotationEnabled && state.annotationHistory.length > 0) {
+                        finalFrame = await mergeAnnotationsWithFrame(frameData);
+                    }
+                    
+                    return window.electronAPI.captureFrame(finalFrame);
+                })
+                .then(result => {
+                    if (result && !result.success) {
+                        console.error('captureFrame failed:', result.error);
+                        state.frameCaptureFailCount++;
                     }
                 })
                 .catch(err => {
                     console.error('Frame capture error:', err);
+                    state.frameCaptureFailCount++;
                 })
                 .finally(() => {
                     state.frameCapturePending = false;

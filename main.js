@@ -932,12 +932,6 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
         
         // Generate output filename
         const savePath = store.get('savePath', path.join(os.homedir(), 'Downloads'));
-        
-        // Ensure save directory exists
-        if (!fs.existsSync(savePath)) {
-            fs.mkdirSync(savePath, { recursive: true });
-        }
-        
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
         const outputFormat = format || 'mp4';
         const outputPath = path.join(savePath, `blazeycc_${timestamp}.${outputFormat}`);
@@ -960,31 +954,9 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
         
         // Check for audio file to merge
         const audioPath = settings.audioPath;
-        let hasAudio = audioPath && fs.existsSync(audioPath);
-        
-        // Validate audio file is substantial (>1KB)
-        if (hasAudio) {
-            const audioStats = fs.statSync(audioPath);
-            if (audioStats.size < 1024) {
-                console.log('Audio file too small, skipping:', audioStats.size, 'bytes');
-                hasAudio = false;
-            }
-        }
+        const hasAudio = audioPath && fs.existsSync(audioPath);
         
         console.log('Audio merge check:', { hasAudio, audioPath });
-        
-        // Verify at least one frame file exists before running FFmpeg
-        const firstFramePath = path.join(tempDir, 'frame_000000.png');
-        const frameFiles = fs.readdirSync(tempDir).filter(f => f.startsWith('frame_'));
-        console.log('Frame files in temp dir:', frameFiles.length, 'files');
-        console.log('First frame exists:', fs.existsSync(firstFramePath), 'path:', firstFramePath);
-        
-        if (frameFiles.length === 0) {
-            console.error('No frame files found in temp dir:', tempDir);
-            fs.rmSync(tempDir, { recursive: true, force: true });
-            canvasRecordingSession = null;
-            return { success: false, error: 'No frames were written to disk' };
-        }
         
         return new Promise((resolve, reject) => {
             let command = ffmpeg()
@@ -1024,10 +996,6 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                 ]);
             }
             
-            // Determine video map source
-            const usesComplexFilter = hasWatermark; // complexFilter outputs [out]
-            const videoMap = usesComplexFilter ? '[out]' : '0:v';
-
             // Output format settings
             if (outputFormat === 'mp4') {
                 const outputOpts = [
@@ -1035,14 +1003,14 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                     '-preset', useFastEncode ? 'fast' : 'medium',
                     '-crf', quality === 'high' ? '18' : quality === 'medium' ? '23' : '28'
                 ];
-
+                
                 // Add audio codec if we have audio
                 if (hasAudio) {
                     outputOpts.push('-c:a', 'aac', '-b:a', '128k');
-                    outputOpts.push('-map', videoMap, '-map', '1:a');
+                    outputOpts.push('-map', '0:v', '-map', '1:a');
                     outputOpts.push('-shortest'); // End when shortest stream ends
                 }
-
+                
                 command = command
                     .videoCodec('libx264')
                     .outputOptions(outputOpts);
@@ -1051,13 +1019,13 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                     '-crf', quality === 'high' ? '20' : quality === 'medium' ? '30' : '40',
                     '-b:v', '0'
                 ];
-
+                
                 if (hasAudio) {
                     outputOpts.push('-c:a', 'libopus', '-b:a', '128k');
-                    outputOpts.push('-map', videoMap, '-map', '1:a');
+                    outputOpts.push('-map', '0:v', '-map', '1:a');
                     outputOpts.push('-shortest');
                 }
-
+                
                 command = command
                     .videoCodec('libvpx-vp9')
                     .outputOptions(outputOpts);
@@ -1067,11 +1035,6 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                     .outputOptions(['-loop', '0']);
                 // GIF doesn't support audio
             }
-            
-            // Log the full command for debugging
-            console.log('FFmpeg output path:', outputPath);
-            console.log('FFmpeg video map:', videoMap);
-            console.log('FFmpeg hasAudio:', hasAudio, 'hasWatermark:', hasWatermark);
             
             command
                 .output(outputPath)
@@ -1095,8 +1058,7 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                     resolve({ success: true, filePath: outputPath });
                 })
                 .on('error', (err) => {
-                    console.error('FFmpeg error:', err.message);
-                    console.error('FFmpeg full error:', err);
+                    console.error('FFmpeg error:', err);
                     // Cleanup temp directories
                     fs.rmSync(tempDir, { recursive: true, force: true });
                     if (audioRecordingSession?.tempDir) {

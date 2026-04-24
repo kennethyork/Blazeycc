@@ -391,14 +391,21 @@ function resizeBrowserViewport(preset) {
     const presetWidth = presetData.width;
     const presetHeight = presetData.height;
     
+    // Guard against zero-size container (e.g. not yet laid out)
+    if (containerWidth === 0 || containerHeight === 0) {
+        elements.browserViewport.style.width = '100%';
+        elements.browserViewport.style.height = '100%';
+        return;
+    }
+    
     const scale = Math.min(
         containerWidth / presetWidth,
         containerHeight / presetHeight,
         1 // Don't upscale beyond native resolution
     );
     
-    const displayWidth = Math.round(presetWidth * scale);
-    const displayHeight = Math.round(presetHeight * scale);
+    const displayWidth = Math.max(Math.round(presetWidth * scale), 100);
+    const displayHeight = Math.max(Math.round(presetHeight * scale), 100);
     
     elements.browserViewport.style.width = displayWidth + 'px';
     elements.browserViewport.style.height = displayHeight + 'px';

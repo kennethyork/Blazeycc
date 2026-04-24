@@ -20,13 +20,5 @@ bucket_name = "blazeycc-recordings"
 # - ADMIN_KEY: Secret key for admin API endpoints
 # - STRIPE_SECRET_KEY: Stripe secret key (sk_live_xxx or sk_test_xxx)
 # - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret (whsec_xxx)
-#
-# Subscription prices:
 # - STRIPE_PRICE_PRO: Stripe Price ID for Pro tier ($5/mo)
 # - STRIPE_PRICE_PRO_PLUS: Stripe Price ID for Pro+ tier ($7/mo)
-# - STRIPE_PRICE_PRO_MAX: Stripe Price ID for Pro Max tier ($12/mo)
-#
-# Lifetime prices (one-time payments):
-# - STRIPE_PRICE_LIFETIME_PRO: Stripe Price ID for Lifetime Pro ($59)
-# - STRIPE_PRICE_LIFETIME_PRO_PLUS: Stripe Price ID for Lifetime Pro+ ($119)
-# - STRIPE_PRICE_LIFETIME_PRO_MAX: Stripe Price ID for Lifetime Pro Max ($199)

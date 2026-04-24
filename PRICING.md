@@ -95,26 +95,6 @@ Everything in Pro+, with expanded storage and team features:
 
 ---
 
-## 🎁 Lifetime Deals
-
-**Pay once, use forever.** Perfect for long-term users who want to lock in savings.
-
-| Tier | One-Time Price | Equivalent To | Features |
-|------|----------------|---------------|----------|
-| **Lifetime Pro** | $59 | 1 year of Pro | All Pro features, forever |
-| **Lifetime Pro+** | $119 | 17 months of Pro+ | All Pro+ features, forever |
-| **Lifetime Pro Max** | $199 | 17 months of Pro Max | All Pro Max features, forever |
-
-**Lifetime includes:**
-- ✅ All current features for your tier
-- ✅ All future updates
-- ✅ No recurring payments
-- ✅ Priority support for Pro Max
-
-> **Note:** Lifetime licenses are for individual use. Team seats in Pro Max Lifetime are for the original purchaser + 2 additional seats.
-
----
-
 ## 🚀 How It Works
 
 1. **Download Blazeycc** from the [releases page](https://github.com/blazeycc/Blazeycc/releases)

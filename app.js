@@ -1,55 +1,4 @@
-// IndexedDB Storage Wrapper
-const DB_NAME = 'blazeycc';
-const DB_VERSION = 1;
-const STORE_NAME = 'settings';
-
-let db = null;
-
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        
-        request.onerror = () => reject(request.error);
-        
-        request.onsuccess = () => {
-            db = request.result;
-            resolve(db);
-        };
-        
-        request.onupgradeneeded = (event) => {
-            const database = event.target.result;
-            if (!database.objectStoreNames.contains(STORE_NAME)) {
-                database.createObjectStore(STORE_NAME, { keyPath: 'key' });
-            }
-        };
-    });
-}
-
-async function getSetting(key) {
-    if (!db) await openDB();
-    
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.get(key);
-        
-        request.onsuccess = () => resolve(request.result?.value);
-        request.onerror = () => reject(request.error);
-    });
-}
-
-async function setSetting(key, value) {
-    if (!db) await openDB();
-    
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.put({ key, value });
-        
-        request.onsuccess = () => resolve(value);
-        request.onerror = () => reject(request.error);
-    });
-}
+// DOM Elements
 const elements = {
     urlInput: document.getElementById('urlInput'),
     loadBtn: document.getElementById('loadBtn'),
@@ -809,14 +758,10 @@ async function takeScreenshot() {
     }
 }
 
-// Bookmarks functions (using IndexedDB)
+// Bookmarks functions
 async function loadBookmarks() {
-    state.bookmarks = await getSetting('bookmarks') || [];
+    state.bookmarks = await window.electronAPI.getBookmarks();
     renderBookmarks();
-}
-
-async function saveBookmarks() {
-    await setSetting('bookmarks', state.bookmarks);
 }
 
 function renderBookmarks() {
@@ -842,9 +787,8 @@ function renderBookmarks() {
         
         item.querySelector('.bookmark-remove').addEventListener('click', async (e) => {
             e.stopPropagation();
-            state.bookmarks = state.bookmarks.filter(b => b.url !== bookmark.url);
-            await saveBookmarks();
-            renderBookmarks();
+            await window.electronAPI.removeBookmark(bookmark.url);
+            await loadBookmarks();
             showNotification('Bookmark removed', 'info');
         });
         
@@ -861,18 +805,14 @@ async function addCurrentBookmark() {
     const url = elements.webview.getURL();
     const title = await elements.webview.executeJavaScript('document.title');
     
-    const exists = state.bookmarks.find(b => b.url === url);
-    if (!exists) {
-        state.bookmarks.push({ url, title, addedAt: Date.now() });
-        await saveBookmarks();
-    }
+    await window.electronAPI.addBookmark(url, title, null);
     await loadBookmarks();
     showNotification('Bookmark added!', 'success');
 }
 
-// History functions (using IndexedDB)
+// History functions
 async function loadHistory() {
-    state.history = await getSetting('history') || [];
+    state.history = await window.electronAPI.getHistory();
     renderHistory();
 }
 
@@ -927,20 +867,26 @@ function renderHistory() {
             window.electronAPI.openInFolder(record.path);
         });
         
-        async function saveHistory() {
-    await setSetting('history', state.history);
+        item.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+            await window.electronAPI.deleteHistoryItem(record.path);
+            await loadHistory();
+            showNotification('Removed from history', 'info');
+        });
+        
+        elements.historyList.appendChild(item);
+    });
 }
 
-function deleteHistoryItem(filePath) {
-    state.history = state.history.filter(h => h.path !== filePath);
-    saveHistory();
-    loadHistory();
+function toggleHistoryPanel() {
+    const isVisible = elements.historyPanel.style.display !== 'none';
+    elements.historyPanel.style.display = isVisible ? 'none' : 'block';
+    elements.settingsPanel.style.display = 'none';
+    elements.cloudLibraryPanel.style.display = 'none';
 }
 
-function clearHistory() {
-    state.history = [];
-    saveHistory();
-    loadHistory();
+async function clearHistory() {
+    await window.electronAPI.clearHistory();
+    await loadHistory();
     showNotification('History cleared', 'info');
 }
 
@@ -1418,32 +1364,54 @@ function stopAutoScroll() {
     }
 }
 
-// License management - all features unlocked by default
-let isProLicensed = true;
-let isProPlusLicensed = true;
-let licenseTier = 'pro';
+// License management
+let isProLicensed = false;
+let isProPlusLicensed = false;
+let licenseTier = null;
 
 async function loadLicense() {
-    // All features unlocked - just unlock them immediately
-    showLicenseActive();
-    unlockProFeatures();
-    unlockProPlusFeatures();
+    try {
+        const license = await window.electronAPI.getLicense();
+        if (license && license.isValid) {
+            isProLicensed = true;
+            licenseTier = await window.electronAPI.getLicenseTier();
+            isProPlusLicensed = licenseTier === 'pro+';
+            showLicenseActive(license.email, licenseTier);
+            unlockProFeatures();
+            if (isProPlusLicensed) {
+                unlockProPlusFeatures();
+            }
+        } else {
+            isProLicensed = false;
+            isProPlusLicensed = false;
+            licenseTier = null;
+            showLicenseInactive();
+        }
+    } catch (error) {
+        console.error('Error loading license:', error);
+    }
 }
 
-function showLicenseActive() {
+function showLicenseActive(email, tier) {
     const inactiveSection = document.getElementById('licenseInactive');
     const activeSection = document.getElementById('licenseActive');
+    const emailDisplay = document.getElementById('licenseEmailDisplay');
     const tierDisplay = document.getElementById('licenseTierDisplay');
     const successText = document.getElementById('licenseSuccessText');
     
     if (inactiveSection) inactiveSection.style.display = 'none';
     if (activeSection) activeSection.style.display = 'block';
-    if (tierDisplay) tierDisplay.textContent = 'Pro (All Unlocked)';
-    if (successText) successText.textContent = 'All Features Unlocked';
+    if (emailDisplay) emailDisplay.textContent = email;
+    if (tierDisplay) tierDisplay.textContent = tier === 'pro+' ? 'Pro+' : 'Pro';
+    if (successText) successText.textContent = tier === 'pro+' ? '✅ Pro+ License Active' : '✅ Pro License Active';
 }
 
 function showLicenseInactive() {
-    // Not used anymore - features always unlocked
+    const inactiveSection = document.getElementById('licenseInactive');
+    const activeSection = document.getElementById('licenseActive');
+    
+    if (inactiveSection) inactiveSection.style.display = 'block';
+    if (activeSection) activeSection.style.display = 'none';
 }
 
 function unlockProFeatures() {
@@ -1452,13 +1420,7 @@ function unlockProFeatures() {
         proSection.classList.add('pro-unlocked');
     }
     
-    // No-op functions (kept for API compatibility)
-function unlockProFeatures() {
-    const proSection = document.querySelector('.pro-section');
-    if (proSection) {
-        proSection.classList.add('pro-unlocked');
-    }
-    
+    // Enable Pro checkboxes (except cloud storage which is Pro+)
     const proCheckboxes = document.querySelectorAll('.pro-feature input:not(#enableCloudSync)');
     proCheckboxes.forEach(cb => {
         cb.disabled = false;
@@ -1466,40 +1428,179 @@ function unlockProFeatures() {
 }
 
 function unlockProPlusFeatures() {
+    // Unlock cloud library button (Pro+ only)
     if (elements.cloudLibraryBtn) {
         elements.cloudLibraryBtn.classList.remove('pro-btn-locked');
         elements.cloudLibraryBtn.classList.add('unlocked');
     }
     
+    // Enable cloud sync checkbox
     const cloudSyncCheckbox = document.getElementById('enableCloudSync');
     if (cloudSyncCheckbox) {
         cloudSyncCheckbox.disabled = false;
     }
     
+    // Show cloud storage section
     const cloudSyncSection = document.getElementById('cloudSyncSection');
     if (cloudSyncSection) {
         cloudSyncSection.style.display = 'block';
     }
 }
 
-function lockProPlusFeatures() {}
-function lockProFeatures() {}
+function lockProPlusFeatures() {
+    // Lock cloud library button
+    if (elements.cloudLibraryBtn) {
+        elements.cloudLibraryBtn.classList.add('pro-btn-locked');
+        elements.cloudLibraryBtn.classList.remove('unlocked');
+    }
+    
+    // Disable cloud sync checkbox
+    const cloudSyncCheckbox = document.getElementById('enableCloudSync');
+    if (cloudSyncCheckbox) {
+        cloudSyncCheckbox.disabled = true;
+        cloudSyncCheckbox.checked = false;
+    }
+    
+    // Hide cloud storage section
+    const cloudSyncSection = document.getElementById('cloudSyncSection');
+    if (cloudSyncSection) {
+        cloudSyncSection.style.display = 'none';
+    }
+}
 
-// License activation - just show message that all features are unlocked
+function lockProFeatures() {
+    const proSection = document.querySelector('.pro-section');
+    if (proSection) {
+        proSection.classList.remove('pro-unlocked');
+    }
+    
+    // Disable Pro checkboxes
+    const proCheckboxes = document.querySelectorAll('.pro-feature input');
+    proCheckboxes.forEach(cb => {
+        cb.disabled = true;
+        cb.checked = false;
+    });
+    
+    // Also lock Pro+ features
+    lockProPlusFeatures();
+}
+
 async function activateLicense() {
-    showNotification('All features already unlocked!', 'info');
+    const emailInput = document.getElementById('licenseEmail');
+    const keyInput = document.getElementById('licenseKey');
+    
+    const email = emailInput?.value?.trim();
+    const key = keyInput?.value?.trim();
+    
+    if (!email || !key) {
+        showNotification('Please enter both email and license key', 'error');
+        return;
+    }
+    
+    try {
+        showNotification('Verifying license...', 'info');
+        const result = await window.electronAPI.setLicense(email, key);
+        if (result.success) {
+            isProLicensed = true;
+            licenseTier = result.tier || 'pro';
+            isProPlusLicensed = licenseTier === 'pro+';
+            showLicenseActive(email, licenseTier);
+            unlockProFeatures();
+            if (isProPlusLicensed) {
+                unlockProPlusFeatures();
+            }
+            showNotification('🎉 ' + result.message, 'success');
+        } else {
+            showNotification(result.message || 'Invalid license key', 'error');
+        }
+    } catch (error) {
+        showNotification('Error activating license: ' + error.message, 'error');
+    }
 }
 
 async function deactivateLicense() {
-    showNotification('All features remain unlocked!', 'info');
+    try {
+        await window.electronAPI.clearLicense();
+        isProLicensed = false;
+        showLicenseInactive();
+        lockProFeatures();
+        showNotification('License deactivated', 'info');
+        
+        // Clear inputs
+        const emailInput = document.getElementById('licenseEmail');
+        const keyInput = document.getElementById('licenseKey');
+        if (emailInput) emailInput.value = '';
+        if (keyInput) keyInput.value = '';
+    } catch (error) {
+        showNotification('Error deactivating license', 'error');
+    }
 }
 
 async function redeemPromoCode() {
-    showNotification('All features already unlocked!', 'info');
+    const emailInput = document.getElementById('licenseEmail');
+    const promoInput = document.getElementById('promoCode');
+    
+    const email = emailInput?.value?.trim();
+    const code = promoInput?.value?.trim();
+    
+    if (!email) {
+        showNotification('Please enter your email first', 'error');
+        emailInput?.focus();
+        return;
+    }
+    
+    if (!code) {
+        showNotification('Please enter a promo code', 'error');
+        promoInput?.focus();
+        return;
+    }
+    
+    try {
+        showNotification('Redeeming promo code...', 'info');
+        const result = await window.electronAPI.redeemPromo(email, code);
+        
+        if (result.success) {
+            isProLicensed = true;
+            showLicenseActive(email);
+            unlockProFeatures();
+            showNotification('🎉 ' + result.message, 'success');
+            
+            // Clear promo input
+            if (promoInput) promoInput.value = '';
+        } else {
+            showNotification(result.message || 'Invalid promo code', 'error');
+        }
+    } catch (error) {
+        showNotification('Error redeeming promo code: ' + error.message, 'error');
+    }
 }
 
 async function openStripeCheckout() {
-    showNotification('Payments disabled - all features free!', 'info');
+    const emailInput = document.getElementById('licenseEmail');
+    const email = emailInput?.value?.trim();
+    
+    if (!email) {
+        showNotification('Please enter your email first', 'error');
+        emailInput?.focus();
+        return;
+    }
+    
+    try {
+        showNotification('Opening checkout...', 'info');
+        const result = await window.electronAPI.createStripeCheckout(email, 'pro');
+        
+        if (result.url) {
+            // Open Stripe checkout in default browser
+            window.electronAPI.openExternal(result.url);
+            showNotification('Checkout opened in your browser', 'success');
+        } else if (result.error) {
+            showNotification(result.error, 'error');
+        }
+    } catch (error) {
+        // Fallback to website
+        window.electronAPI.openExternal('https://blazeycc.com/pricing');
+        showNotification('Opening pricing page...', 'info');
+    }
 }
 
 // Helper to check if Pro features are enabled

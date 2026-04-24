@@ -139,18 +139,13 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js'),
-            webviewTag: true
+            webviewTag: true // Enable webview tag
         },
         title: 'Blazeycc'
     });
 
-    // Load the app - vite build goes to dist/, dev server runs differently
-    if (app.isPackaged) {
-        mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
-    } else {
-        // In development, load from dist after vite build
-        mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
-    }
+    // Use app:// protocol for packaged app to avoid file path issues
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
     
     // Log when page loads successfully
     mainWindow.webContents.on('did-finish-load', () => {
@@ -206,11 +201,15 @@ ipcMain.handle('get-webview-source', async (event, webviewId) => {
 
 // Save video file (with MP4/GIF conversion and resize)
 ipcMain.handle('save-video', async (event, { filename, data, format, quality, width, height, proSettings }) => {
-    // All users get Pro features (no license required)
+    // Check if Pro licensed
+    const license = store.get('license', null);
+    const isProLicensed = license && license.email && license.key && validateLicenseKey(license.email, license.key);
+    
+    // Pro settings defaults
     const settings = proSettings || {};
-    const useFastEncode = settings.fastEncode;
-    const customWatermark = settings.customWatermark;
-    const shouldAddWatermark = false; // No watermark for any users
+    const useFastEncode = isProLicensed && settings.fastEncode;
+    const customWatermark = isProLicensed && settings.customWatermark;
+    const shouldAddWatermark = !isProLicensed; // Free users get default watermark
     
     try {
         const savePath = store.get('savePath');
@@ -376,9 +375,12 @@ ipcMain.handle('save-video', async (event, { filename, data, format, quality, wi
                     }
                     
                     // Track video creation
-                    trackUsage('video_created', { format, quality });
+                    trackUsage('video_created', { format, quality, isProLicensed });
                     
                     resolve({ success: true, path: outputPath });
+                })
+                .on('error', (err) => {
+                    resolve({ success: false, error: err.message });
                 })
                 .run();
         });
@@ -387,46 +389,430 @@ ipcMain.handle('save-video', async (event, { filename, data, format, quality, wi
     }
 });
 
-// IndexedDB storage handlers - forward to renderer process
-// The renderer will handle IndexedDB directly via the preload API
-
-// Bookmarks management - use electron-store for now (can migrate later)
+// Bookmarks management
 ipcMain.handle('get-bookmarks', async () => {
-    return [];
+    return store.get('bookmarks', []);
 });
 
 ipcMain.handle('add-bookmark', async (event, { url, title, favicon }) => {
-    return [];
+    const bookmarks = store.get('bookmarks', []);
+    const exists = bookmarks.find(b => b.url === url);
+    if (!exists) {
+        bookmarks.push({ url, title, favicon, addedAt: Date.now() });
+        store.set('bookmarks', bookmarks);
+    }
+    return bookmarks;
 });
 
 ipcMain.handle('remove-bookmark', async (event, url) => {
-    return [];
+    const bookmarks = store.get('bookmarks', []).filter(b => b.url !== url);
+    store.set('bookmarks', bookmarks);
+    return bookmarks;
 });
 
-// Recording history management - use electron-store for now
+// Recording history management (local + cloud sync for Pro users)
+async function syncHistoryToCloud(record) {
+    try {
+        const license = store.get('license', null);
+        if (!license?.email || !license?.key) return;
+        
+        await fetch(`${LICENSE_API_URL}/history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license.email,
+                licenseKey: license.key,
+                record
+            })
+        });
+    } catch (error) {
+        console.error('History cloud sync failed:', error);
+    }
+}
+
+async function fetchCloudHistory() {
+    try {
+        const license = store.get('license', null);
+        if (!license?.email || !license?.key) return null;
+        
+        const response = await fetch(
+            `${LICENSE_API_URL}/history?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&limit=50`
+        );
+        const data = await response.json();
+        return data.success ? data.history : null;
+    } catch (error) {
+        console.error('History cloud fetch failed:', error);
+        return null;
+    }
+}
+
 ipcMain.handle('get-history', async () => {
-    return store.get('history', []);
+    // Get local history
+    const localHistory = store.get('history', []);
+    
+    // Try to get cloud history for Pro users
+    const cloudHistory = await fetchCloudHistory();
+    
+    if (cloudHistory) {
+        // Merge: cloud is authoritative, but keep local items not in cloud
+        const cloudPaths = new Set(cloudHistory.map(h => h.path));
+        const uniqueLocal = localHistory.filter(h => !cloudPaths.has(h.path));
+        const merged = [...cloudHistory, ...uniqueLocal].slice(0, 50);
+        store.set('history', merged);
+        return merged;
+    }
+    
+    return localHistory;
 });
 
 ipcMain.handle('add-history', async (event, record) => {
     const history = store.get('history', []);
     const newRecord = { ...record, recordedAt: Date.now() };
     history.unshift(newRecord);
+    // Keep last 50 recordings
     if (history.length > 50) history.pop();
     store.set('history', history);
+    
+    // Sync to cloud for Pro users (async, non-blocking)
+    syncHistoryToCloud(newRecord);
+    
     return history;
 });
 
 ipcMain.handle('clear-history', async () => {
     store.set('history', []);
+    
+    // Clear cloud history for Pro users
+    try {
+        const license = store.get('license', null);
+        if (license?.email && license?.key) {
+            await fetch(`${LICENSE_API_URL}/history/clear`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: license.email,
+                    licenseKey: license.key
+                })
+            });
+        }
+    } catch (error) {
+        console.error('Cloud history clear failed:', error);
+    }
+    
     return [];
 });
 
 ipcMain.handle('delete-history-item', async (event, filePath) => {
     const history = store.get('history', []);
+    const itemToDelete = history.find(h => h.path === filePath);
     const newHistory = history.filter(h => h.path !== filePath);
     store.set('history', newHistory);
+    
+    // Delete from cloud for Pro users
+    if (itemToDelete?.id) {
+        try {
+            const license = store.get('license', null);
+            if (license?.email && license?.key) {
+                await fetch(`${LICENSE_API_URL}/history/delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: license.email,
+                        licenseKey: license.key,
+                        id: itemToDelete.id
+                    })
+                });
+            }
+        } catch (error) {
+            console.error('Cloud history delete failed:', error);
+        }
+    }
+    
     return newHistory;
+});
+
+// ====================
+// Cloud Storage (R2) handlers for Pro users
+// ====================
+
+ipcMain.handle('cloud-storage-upload', async (event, filePath) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        
+        if (!fs.existsSync(filePath)) {
+            return { success: false, error: 'File not found' };
+        }
+        
+        const filename = path.basename(filePath);
+        const fileBuffer = fs.readFileSync(filePath);
+        const stats = fs.statSync(filePath);
+        
+        // Determine content type
+        const ext = path.extname(filePath).toLowerCase();
+        const contentTypes = {
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.gif': 'image/gif'
+        };
+        const contentType = contentTypes[ext] || 'application/octet-stream';
+        
+        const url = `${LICENSE_API_URL}/storage/upload?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&filename=${encodeURIComponent(filename)}`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': contentType,
+                'Content-Length': stats.size.toString()
+            },
+            body: fileBuffer
+        });
+        
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud upload failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('cloud-storage-list', async () => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const response = await fetch(
+            `${LICENSE_API_URL}/storage/list?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}`
+        );
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud list failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('cloud-storage-download', async (event, key, filename) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const savePath = store.get('savePath');
+        const downloadPath = require('path').join(savePath, filename);
+        
+        const url = `${LICENSE_API_URL}/storage/download?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&key=${encodeURIComponent(key)}`;
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            return { success: false, error: errorData.error || 'Download failed' };
+        }
+        
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        
+        require('fs').writeFileSync(downloadPath, buffer);
+        
+        return { success: true, path: downloadPath };
+    } catch (error) {
+        console.error('Cloud download failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('cloud-storage-delete', async (event, key) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const response = await fetch(`${LICENSE_API_URL}/storage/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license.email,
+                licenseKey: license.key,
+                key
+            })
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud delete failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+ipcMain.handle('cloud-storage-usage', async () => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
+    
+    try {
+        const response = await fetch(
+            `${LICENSE_API_URL}/storage/usage?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}`
+        );
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud usage check failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Generate share link for cloud file
+ipcMain.handle('cloud-storage-share', async (event, { key, expiresIn }) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro+ license required' };
+    }
+    
+    try {
+        const response = await fetch(`${LICENSE_API_URL}/storage/share`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license.email,
+                licenseKey: license.key,
+                key,
+                expiresIn: expiresIn || 7 // Default 7 days
+            })
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud share failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Revoke share link for cloud file
+ipcMain.handle('cloud-storage-unshare', async (event, key) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro+ license required' };
+    }
+    
+    try {
+        const response = await fetch(`${LICENSE_API_URL}/storage/unshare`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license.email,
+                licenseKey: license.key,
+                key
+            })
+        });
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Cloud unshare failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Get preview URL for cloud file
+ipcMain.handle('cloud-storage-preview-url', async (event, key) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro+ license required' };
+    }
+    
+    // Return the preview URL that can be used in a video element
+    const previewUrl = `${LICENSE_API_URL}/storage/preview?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&key=${encodeURIComponent(key)}`;
+    
+    return { success: true, url: previewUrl };
+});
+
+// Upload custom thumbnail for a video (Pro+)
+ipcMain.handle('cloud-upload-thumbnail', async (event, { videoKey, thumbnailPath }) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro+ license required' };
+    }
+    
+    try {
+        const fileData = fs.readFileSync(thumbnailPath);
+        const url = `${LICENSE_API_URL}/storage/thumbnail?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&videoKey=${encodeURIComponent(videoKey)}`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'image/jpeg' },
+            body: fileData
+        });
+        return await response.json();
+    } catch (error) {
+        console.error('Thumbnail upload failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Set download enabled/disabled for a video (Pro+)
+ipcMain.handle('cloud-set-download-enabled', async (event, { videoKey, enabled }) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro+ license required' };
+    }
+    
+    try {
+        const response = await fetch(`${LICENSE_API_URL}/storage/download-setting`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: license.email,
+                licenseKey: license.key,
+                videoKey,
+                allowDownload: enabled
+            })
+        });
+        return await response.json();
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Get embed code for a video (Pro Max)
+ipcMain.handle('cloud-get-embed-code', async (event, videoKey) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro Max license required' };
+    }
+    
+    try {
+        const url = `${LICENSE_API_URL}/storage/embed?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&videoKey=${encodeURIComponent(videoKey)}`;
+        const response = await fetch(url);
+        return await response.json();
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Get video analytics (Pro Max)
+ipcMain.handle('cloud-get-video-analytics', async (event, videoKey) => {
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro Max license required' };
+    }
+    
+    try {
+        const url = `${LICENSE_API_URL}/storage/analytics?email=${encodeURIComponent(license.email)}&licenseKey=${encodeURIComponent(license.key)}&videoKey=${encodeURIComponent(videoKey)}`;
+        const response = await fetch(url);
+        return await response.json();
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
 });
 
 // Export to YouTube - opens YouTube Studio upload page
@@ -574,51 +960,186 @@ async function redeemPromoCode(email, code) {
     }
 }
 
-// License management - always unlocked (no auth/payment)
 ipcMain.handle('get-license', async () => {
-    return { email: 'free@user', key: 'unlocked', isValid: true };
+    const license = store.get('license', null);
+    if (license && license.email && license.key) {
+        // Local validation first (fast)
+        const localValid = validateLicenseKey(license.email, license.key);
+        if (!localValid) {
+            return { email: license.email, key: license.key, isValid: false };
+        }
+        
+        // Online validation (check revocation) - async, don't block
+        validateLicenseOnline(license.email, license.key).then(result => {
+            if (result.valid === false && !result.offline) {
+                // License was revoked - clear it
+                store.delete('license');
+            }
+        }).catch(() => {});
+        
+        return { ...license, isValid: true };
+    }
+    return { email: null, key: null, isValid: false };
 });
 
-ipcMain.handle('set-license', async () => {
-    return { success: true, message: 'All features unlocked!' };
+ipcMain.handle('set-license', async (event, { email, key, tier }) => {
+    if (!email || !key) {
+        return { success: false, message: 'Email and license key are required' };
+    }
+    
+    // Local validation first
+    const isValid = validateLicenseKey(email, key);
+    if (!isValid) {
+        return { success: false, message: 'Invalid license key. Make sure email matches your sponsor email.' };
+    }
+    
+    // Online validation to check revocation and get tier
+    const onlineResult = await validateLicenseOnline(email, key);
+    if (onlineResult.valid === false && !onlineResult.offline) {
+        return { success: false, message: onlineResult.reason || 'License has been revoked' };
+    }
+    
+    // Use tier from API if available, otherwise use provided tier or default to 'pro'
+    const licenseTier = onlineResult.tier || tier || 'pro';
+    
+    store.set('license', {
+        email,
+        key,
+        tier: licenseTier,  // 'pro' ($5/mo) or 'pro+' ($7/mo)
+        activatedAt: new Date().toISOString()
+    });
+    
+    // Track license activation
+    trackUsage('license_activated', { tier: licenseTier });
+    
+    return { success: true, tier: licenseTier, message: licenseTier === 'pro+' ? 'Pro+ license activated!' : 'Pro license activated!' };
 });
 
-ipcMain.handle('validate-license', async () => {
-    return true;
+ipcMain.handle('validate-license', async (event, { email, key }) => {
+    const localValid = validateLicenseKey(email, key);
+    if (!localValid) return false;
+    
+    // Check online if local passes
+    const onlineResult = await validateLicenseOnline(email, key);
+    return onlineResult.valid !== false;
 });
 
 ipcMain.handle('clear-license', async () => {
+    trackUsage('license_deactivated');
+    store.delete('license');
     return { success: true };
 });
 
-ipcMain.handle('redeem-promo', async () => {
-    return { success: true, message: 'All features unlocked!' };
+// Promo code redemption
+ipcMain.handle('redeem-promo', async (event, { email, code }) => {
+    if (!email || !code) {
+        return { success: false, message: 'Email and promo code are required' };
+    }
+    
+    const result = await redeemPromoCode(email, code);
+    
+    if (result.success && result.licenseKey) {
+        // Auto-activate the license
+        store.set('license', {
+            email: result.email,
+            key: result.licenseKey,
+            activatedAt: new Date().toISOString(),
+            promoCode: code
+        });
+        return { success: true, message: 'Promo code redeemed! Pro license activated.', licenseKey: result.licenseKey };
+    }
+    
+    return { success: false, message: result.error || result.message || 'Invalid promo code' };
 });
 
-ipcMain.handle('create-stripe-checkout', async () => {
-    return { error: 'Payments disabled' };
+// Create Stripe checkout session
+ipcMain.handle('create-stripe-checkout', async (event, { email, tier }) => {
+    if (!email) {
+        return { error: 'Email is required' };
+    }
+    
+    try {
+        const response = await fetch('https://blazeycc-license.kennethhy-me.workers.dev/stripe/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email,
+                tier: tier || 'pro',
+                successUrl: 'https://blazeycc.com/success',
+                cancelUrl: 'https://blazeycc.com/pricing'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.url) {
+            return { url: data.url, sessionId: data.sessionId };
+        } else {
+            return { error: data.error || 'Failed to create checkout session' };
+        }
+    } catch (error) {
+        console.error('Stripe checkout error:', error);
+        return { error: 'Failed to connect to payment service' };
+    }
 });
 
-ipcMain.handle('open-stripe-portal', async () => {
-    return { error: 'Payments disabled' };
+// Open Stripe customer portal
+ipcMain.handle('open-stripe-portal', async (event, { email }) => {
+    if (!email) {
+        return { error: 'Email is required' };
+    }
+    
+    try {
+        const response = await fetch('https://blazeycc-license.kennethhy-me.workers.dev/stripe/portal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        
+        const data = await response.json();
+        
+        if (data.url) {
+            return { url: data.url };
+        } else {
+            return { error: data.error || 'No subscription found' };
+        }
+    } catch (error) {
+        console.error('Stripe portal error:', error);
+        return { error: 'Failed to connect to payment service' };
+    }
 });
 
-// Track usage (optional analytics)
-ipcMain.handle('track-usage', async () => {
+// Track usage from renderer
+ipcMain.handle('track-usage', async (event, { action, metadata }) => {
+    await trackUsage(action, metadata);
     return { success: true };
 });
 
-// All users are Pro
+// Check if Pro licensed
 ipcMain.handle('is-pro-licensed', async () => {
-    return true;
+    const license = store.get('license', null);
+    if (license && license.email && license.key) {
+        return validateLicenseKey(license.email, license.key);
+    }
+    return false;
 });
 
+// Check if Pro+ licensed (includes cloud storage)
 ipcMain.handle('is-pro-plus-licensed', async () => {
-    return true;
+    const license = store.get('license', null);
+    if (license && license.email && license.key && license.tier === 'pro+') {
+        return validateLicenseKey(license.email, license.key);
+    }
+    return false;
 });
 
+// Get license tier
 ipcMain.handle('get-license-tier', async () => {
-    return 'pro';
+    const license = store.get('license', null);
+    if (license && license.email && license.key && validateLicenseKey(license.email, license.key)) {
+        return license.tier || 'pro';
+    }
+    return null;
 });
 
 // Scheduled recordings storage

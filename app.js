@@ -488,8 +488,6 @@ async function startRecording() {
         // Start frame capture loop (~15fps to reduce freeze/lag)
         state.frameCapturePending = false;
         state.droppedFrames = 0;
-        // Get webview's webContentsId for direct capture
-        state.webviewWebContentsId = elements.webview.getWebContentsId ? elements.webview.getWebContentsId() : null;
         
         state.frameCaptureInterval = setInterval(() => {
             if (!state.canvasRecordingActive) return;
@@ -501,15 +499,24 @@ async function startRecording() {
             
             state.frameCapturePending = true;
             
-            window.electronAPI.captureWebviewFrame(state.webviewWebContentsId)
-                .then(async frameResult => {
-                    if (frameResult.success && state.canvasRecordingActive) {
-                        // Merge annotations if any
-                        let frameData = frameResult.data;
-                        if (state.annotationEnabled && state.annotationHistory.length > 0) {
-                            frameData = await mergeAnnotationsWithFrame(frameResult.data);
-                        }
-                        return window.electronAPI.captureFrame(frameData);
+            // Capture directly from webview element (renders actual website content)
+            elements.webview.capturePage()
+                .then(async image => {
+                    if (!state.canvasRecordingActive) return;
+                    
+                    const frameData = image.toDataURL();
+                    
+                    // Merge annotations if any
+                    let finalFrame = frameData;
+                    if (state.annotationEnabled && state.annotationHistory.length > 0) {
+                        finalFrame = await mergeAnnotationsWithFrame(frameData);
+                    }
+                    
+                    return window.electronAPI.captureFrame(finalFrame);
+                })
+                .then(result => {
+                    if (result && !result.success) {
+                        console.error('captureFrame failed:', result.error);
                     }
                 })
                 .catch(err => {
@@ -602,7 +609,7 @@ async function stopRecording() {
                     title: urlHost,
                     path: result.filePath,
                     filename: result.filePath.split('/').pop().split('\\').pop(),
-                    preset: settings.preset || 'Custom',
+                    preset: settings.presetName || 'Custom',
                     thumbnail: '',
                     duration: duration,
                     format: settings.format,

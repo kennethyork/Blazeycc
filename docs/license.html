@@ -3,63 +3,448 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Blazeycc License - Open source, all features free">
-    <title>License - Blazeycc</title>
+    <title>Get Your License - Blazeycc</title>
+    <meta name="description" content="Get your Blazeycc Pro, Pro+, or Pro Max license key">
     <link rel="icon" type="image/x-icon" href="favicon.ico">
-    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        .hero { text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #1a1a2e, #16213e); color: white; }
-        .hero h1 { font-size: 2.5rem; margin-bottom: 10px; }
-        .hero .subtitle { font-size: 1.2rem; opacity: 0.8; }
-        .content { max-width: 700px; margin: 0 auto; padding: 40px 20px; }
-        .content h2 { color: #1a1a2e; margin-top: 30px; }
-        .content p { color: #666; line-height: 1.6; }
-        .features-list { list-style: none; padding: 0; }
-        .features-list li { padding: 12px 0; border-bottom: 1px solid #eee; }
-        .check { color: #22c55e; margin-right: 10px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo-icon {
+            font-size: 48px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .logo-text {
+            font-size: 28px;
+            font-weight: 700;
+            margin-top: 10px;
+        }
+        h1 {
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        input[type="email"] {
+            width: 100%;
+            padding: 14px 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        input[type="email"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        input[type="email"]::placeholder {
+            color: rgba(255, 255, 255, 0.3);
+        }
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .result {
+            margin-top: 30px;
+            display: none;
+        }
+        .result.show {
+            display: block;
+        }
+        .result-label {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 8px;
+        }
+        .license-key {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(102, 126, 234, 0.5);
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 2px;
+            color: #667eea;
+            word-break: break-all;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .license-key:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+        .copy-hint {
+            text-align: center;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 8px;
+        }
+        .copied {
+            color: #4ade80;
+        }
+        .tier-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .tier-badge.pro-plus {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+        .tier-badge.pro-max {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+        }
+        .tier-features {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+        .tier-features h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #667eea;
+        }
+        .tier-features ul {
+            list-style: none;
+            padding: 0;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.8;
+        }
+        .tier-features li {
+            padding: 2px 0;
+        }
+        .instructions {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .instructions h3 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .instructions ol {
+            padding-left: 20px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.8;
+        }
+        .note {
+            margin-top: 20px;
+            padding: 16px;
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.3);
+            border-radius: 8px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .note strong {
+            color: #fbbf24;
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .back-link:hover {
+            color: #667eea;
+        }
+        .sponsor-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            padding: 12px;
+            background: linear-gradient(135deg, #ea4aaa, #ff6b6b);
+            border-radius: 8px;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .sponsor-link:hover {
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <a href="index.html" class="logo">Blazeycc</a>
-            <div class="nav-links">
-                <a href="index.html">Home</a>
-                <a href="license.html">License</a>
+    <div class="container">
+        <div class="card">
+            <div class="logo">
+                <div class="logo-icon">◉</div>
+                <div class="logo-text">Blazeycc License</div>
             </div>
+            
+            <h1>Get Your License Key</h1>
+            <p class="subtitle">Enter the email you used for your subscription</p>
+            
+            <form id="licenseForm">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" placeholder="you@example.com" required>
+                </div>
+                <button type="submit" class="btn btn-primary" id="generateBtn">Generate License Key</button>
+            </form>
+            
+            <div class="result" id="result">
+                <div class="tier-badge" id="tierBadge">Pro</div>
+                <div class="result-label">Your License Key:</div>
+                <div class="license-key" id="licenseKey" onclick="copyKey()"></div>
+                <div class="copy-hint" id="copyHint">Click to copy</div>
+                
+                <div class="tier-features" id="tierFeatures">
+                    <h3>Your Features:</h3>
+                    <ul id="featuresList"></ul>
+                </div>
+                
+                <div class="instructions">
+                    <h3>How to activate:</h3>
+                    <ol>
+                        <li>Open Blazeycc app</li>
+                        <li>Go to Settings (gear icon)</li>
+                        <li>Find "Premium Features" section</li>
+                        <li>Enter your email and license key</li>
+                        <li>Click "Activate"</li>
+                    </ol>
+                </div>
+            </div>
+            
+            <div class="note">
+                <strong>Not subscribed yet?</strong> Choose from Pro ($5/mo), Pro+ ($7/mo), or Pro Max ($12/mo)!
+            </div>
+            
+            <a href="pricing.html" class="sponsor-link">
+                💳 View Plans & Subscribe
+            </a>
+            
+            <a href="/" class="back-link">← Back to Blazeycc</a>
         </div>
-    </nav>
+    </div>
 
-    <section class="hero">
-        <h1>Open Source License</h1>
-        <p class="subtitle">Blazeycc is free and open source under GPL-3</p>
-    </section>
-
-    <section class="content">
-        <h2>All Features Free</h2>
-        <p>Blazeycc is completely free with all features unlocked:</p>
-        <ul class="features-list">
-            <li><span class="check">✓</span>No watermark</li>
-            <li><span class="check">✓</span>4K export (3840×2160)</li>
-            <li><span class="check">✓</span>Custom watermarks</li>
-            <li><span class="check">✓</span>Batch recording</li>
-            <li><span class="check">✓</span>Scheduled recordings</li>
-            <li><span class="check">✓</span>Fast encoding</li>
-            <li><span class="check">✓</span>All social media presets</li>
-        </ul>
-
-        <h2>License</h2>
-        <p>Blazeycc is released under the GNU General Public License v3 (GPL-3).</p>
-        <p>You are free to use, modify, and distribute this software. See the LICENSE file for details.</p>
-
-        <h2>Source Code</h2>
-        <p>Get the source code on GitHub:<br>
-        <a href="https://github.com/blazeycc/Blazeycc">github.com/blazeycc/Blazeycc</a></p>
-    </section>
-
-    <footer>
-        <p>Open source under GPL-3 License.</p>
-        <p><a href="https://github.com/blazeycc/Blazeycc">GitHub</a> · <a href="index.html">Home</a></p>
-    </footer>
+    <script>
+        // Use Cloudflare Worker API for secure subscription verification
+        const WORKER_URL = 'https://blazeycc-license.kennethhy-me.workers.dev';
+        
+        // Client-side fallback (only if worker not configured)
+        const SECRET = '4f6fab93b5f0bfb47f3431ab19b230994e94cc946d479e27cf82b1b85c7aaee3';
+        
+        async function generateKeyClient(email) {
+            const encoder = new TextEncoder();
+            const keyData = encoder.encode(SECRET);
+            const messageData = encoder.encode(email.toLowerCase().trim());
+            
+            const cryptoKey = await crypto.subtle.importKey(
+                'raw',
+                keyData,
+                { name: 'HMAC', hash: 'SHA-256' },
+                false,
+                ['sign']
+            );
+            
+            const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+            const hashArray = Array.from(new Uint8Array(signature));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            const shortHash = hashHex.substring(0, 32).toUpperCase();
+            
+            return shortHash.match(/.{1,8}/g).join('-');
+        }
+        
+        async function generateKeyServer(email) {
+            const response = await fetch(WORKER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.message || data.error || 'Failed to verify sponsor');
+            }
+            
+            return { licenseKey: data.licenseKey, tier: data.tier || 'pro' };
+        }
+        
+        const proFeatures = [
+            '✅ No watermark on videos',
+            '✅ 4K export support',
+            '✅ Custom watermarks',
+            '✅ Fast encoding (2x speed)',
+            '✅ Batch URL recording',
+            '✅ Scheduled recordings',
+            '✅ 2GB Cloud Storage',
+            '✅ Shareable video links',
+            '✅ Cloud preview/streaming'
+        ];
+        
+        const proPlusFeatures = [
+            ...proFeatures,
+            '✅ 5GB Cloud Storage',
+            '✅ Export to YouTube/Vimeo',
+            '✅ Custom thumbnails',
+            '✅ Download links for viewers',
+            '✅ Recording annotations'
+        ];
+        
+        const proMaxFeatures = [
+            ...proPlusFeatures,
+            '✅ 15GB Cloud Storage',
+            '✅ 3 team seats included',
+            '✅ Password-protected links',
+            '✅ Recording analytics',
+            '✅ Embed codes',
+            '✅ Priority support'
+        ];
+        
+        function showFeatures(tier) {
+            const badge = document.getElementById('tierBadge');
+            const list = document.getElementById('featuresList');
+            
+            let features, badgeText, badgeClass;
+            if (tier === 'pro_max' || tier === 'pro-max') {
+                features = proMaxFeatures;
+                badgeText = 'Pro Max';
+                badgeClass = 'tier-badge pro-max';
+            } else if (tier === 'pro+' || tier === 'pro_plus') {
+                features = proPlusFeatures;
+                badgeText = 'Pro+';
+                badgeClass = 'tier-badge pro-plus';
+            } else {
+                features = proFeatures;
+                badgeText = 'Pro';
+                badgeClass = 'tier-badge';
+            }
+            
+            badge.textContent = badgeText;
+            badge.className = badgeClass;
+            
+            list.innerHTML = features.map(f => `<li>${f}</li>`).join('');
+        }
+        
+        document.getElementById('licenseForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const btn = document.getElementById('generateBtn');
+            const hint = document.getElementById('copyHint');
+            
+            btn.disabled = true;
+            btn.textContent = 'Verifying...';
+            
+            try {
+                let result;
+                if (WORKER_URL) {
+                    // Secure: verify sponsor via GitHub API
+                    result = await generateKeyServer(email);
+                } else {
+                    // Fallback: client-side generation (trust-based)
+                    result = { licenseKey: await generateKeyClient(email), tier: 'pro' };
+                }
+                
+                document.getElementById('licenseKey').textContent = result.licenseKey;
+                showFeatures(result.tier);
+                document.getElementById('result').classList.add('show');
+                hint.textContent = 'Click to copy';
+                hint.classList.remove('copied');
+            } catch (err) {
+                alert(err.message);
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Generate License Key';
+        });
+        
+        function copyKey() {
+            const key = document.getElementById('licenseKey').textContent;
+            navigator.clipboard.writeText(key).then(() => {
+                const hint = document.getElementById('copyHint');
+                hint.textContent = 'Copied!';
+                hint.classList.add('copied');
+                setTimeout(() => {
+                    hint.textContent = 'Click to copy';
+                    hint.classList.remove('copied');
+                }, 2000);
+            });
+        }
+    </script>
 </body>
 </html>

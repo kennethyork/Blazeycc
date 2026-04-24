@@ -614,7 +614,30 @@ footer {
     }
 
     .download-cards {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+    }
+    
+    .download-card {
+        padding: 1rem 0.5rem;
+    }
+    
+    .download-card h3 {
+        font-size: 1.1rem;
+    }
+    
+    .download-card p {
+        font-size: 0.8rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .btn-download {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+    }
+    
+    .os-icon {
+        font-size: 2rem;
     }
 
 

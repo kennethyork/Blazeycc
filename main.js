@@ -203,7 +203,7 @@ ipcMain.handle('get-webview-source', async (event, webviewId) => {
 ipcMain.handle('save-video', async (event, { filename, data, format, quality, width, height, proSettings }) => {
     // Check if Pro licensed
     const license = store.get('license', null);
-    const isProLicensed = license && license.email && license.key && validateLicenseKey(license.email, license.key);
+    const isProLicensed = true; // All features free
     
     // Pro settings defaults
     const settings = proSettings || {};
@@ -1514,7 +1514,7 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
         
         // Check Pro license
         const license = store.get('license', null);
-        const isProLicensed = license && license.email && license.key && validateLicenseKey(license.email, license.key);
+        const isProLicensed = true; // All features free
         const settings = proSettings || {};
         const useFastEncode = isProLicensed && settings.fastEncode;
         const shouldAddWatermark = !isProLicensed; // Free users get watermark

@@ -337,16 +337,9 @@ function getExportSettings() {
         presetName = 'Custom';
     } else {
         const presetData = FORMAT_PRESETS[preset];
+        width = presetData.width;
+        height = presetData.height;
         presetName = presetData.name;
-        
-        // Use browser/webview dimensions for all platform presets
-        if (elements.webview && elements.webview.offsetWidth > 0) {
-            width = elements.webview.offsetWidth;
-            height = elements.webview.offsetHeight;
-        } else {
-            width = presetData.width;
-            height = presetData.height;
-        }
     }
     
     return { width, height, quality, format, presetName };
@@ -379,36 +372,22 @@ function resizeBrowserViewport(preset) {
     if (preset === 'custom') {
         elements.browserViewport.style.width = '100%';
         elements.browserViewport.style.height = '100%';
+        elements.browserViewport.style.maxWidth = '';
+        elements.browserViewport.style.maxHeight = '';
+        elements.browserViewport.style.aspectRatio = '';
         return;
     }
     
     const presetData = FORMAT_PRESETS[preset];
     if (!presetData) return;
     
-    // Calculate max available size while preserving aspect ratio
-    const containerWidth = elements.browserContainer.clientWidth;
-    const containerHeight = elements.browserContainer.clientHeight;
-    const presetWidth = presetData.width;
-    const presetHeight = presetData.height;
-    
-    // Guard against zero-size container (e.g. not yet laid out)
-    if (containerWidth === 0 || containerHeight === 0) {
-        elements.browserViewport.style.width = '100%';
-        elements.browserViewport.style.height = '100%';
-        return;
-    }
-    
-    const scale = Math.min(
-        containerWidth / presetWidth,
-        containerHeight / presetHeight,
-        1 // Don't upscale beyond native resolution
-    );
-    
-    const displayWidth = Math.max(Math.round(presetWidth * scale), 100);
-    const displayHeight = Math.max(Math.round(presetHeight * scale), 100);
-    
-    elements.browserViewport.style.width = displayWidth + 'px';
-    elements.browserViewport.style.height = displayHeight + 'px';
+    // Use CSS aspect-ratio to fit the preset proportion inside the container
+    // while keeping the webview filling the available space for capture
+    elements.browserViewport.style.width = 'auto';
+    elements.browserViewport.style.height = 'auto';
+    elements.browserViewport.style.maxWidth = '100%';
+    elements.browserViewport.style.maxHeight = '100%';
+    elements.browserViewport.style.aspectRatio = `${presetData.width} / ${presetData.height}`;
 }
 
 // Format URL

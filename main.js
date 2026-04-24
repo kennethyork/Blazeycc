@@ -201,16 +201,15 @@ ipcMain.handle('get-webview-source', async (event, webviewId) => {
 
 // Save video file (with MP4/GIF conversion and resize)
 ipcMain.handle('save-video', async (event, { filename, data, format, quality, width, height, proSettings }) => {
-    // All features enabled by default
-    const settings = proSettings || {};
-    const useFastEncode = settings.fastEncode;
-    const customWatermark = settings.customWatermark;
-    const shouldAddWatermark = false; // No watermark by default
+    // Check if Pro licensed
+    const license = store.get('license', null);
+    const isProLicensed = license && license.email && license.key && validateLicenseKey(license.email, license.key);
     
-    // Enable all features
-    const enable4k = true;
-    const batchMode = true;
-    const scheduleMode = true;
+    // Pro settings defaults
+    const settings = proSettings || {};
+    const useFastEncode = isProLicensed && settings.fastEncode;
+    const customWatermark = isProLicensed && settings.customWatermark;
+    const shouldAddWatermark = !isProLicensed; // Free users get default watermark
     
     try {
         const savePath = store.get('savePath');
@@ -533,56 +532,14 @@ ipcMain.handle('delete-history-item', async (event, filePath) => {
 });
 
 // ====================
-// Cloud Storage (disabled)
+// Cloud Storage (R2) handlers for Pro users
 // ====================
 
 ipcMain.handle('cloud-storage-upload', async (event, filePath) => {
-    return { success: false, error: 'Cloud storage disabled - all features free!' };
-});
-
-ipcMain.handle('cloud-storage-list', async () => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-storage-download', async (event, key, filename) => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-storage-delete', async (event, key) => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-storage-usage', async () => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-storage-share', async (event, { key, expiresIn }) => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-storage-unshare', async (event, key) => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-storage-preview-url', async (event, key) => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-upload-thumbnail', async (event, { videoKey, thumbnailPath }) => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-set-download-enabled', async (event, { videoKey, enabled }) => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-get-embed-code', async (event, videoKey) => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
-
-ipcMain.handle('cloud-get-video-analytics', async (event, videoKey) => {
-    return { success: false, error: 'Cloud storage disabled' };
-});
+    const license = store.get('license', null);
+    if (!license?.email || !license?.key) {
+        return { success: false, error: 'Pro license required' };
+    }
     
     try {
         const fs = require('fs');
@@ -1004,14 +961,23 @@ async function redeemPromoCode(email, code) {
 }
 
 ipcMain.handle('get-license', async () => {
-    // All features free - no license needed
-    return { email: 'free@blazeycc.com', key: 'FREE', isValid: true, tier: 'free' };
-});
-
-ipcMain.handle('set-license', async (event, { email, key, tier }) => {
-    // All features free - no license needed
-    return { success: true, tier: 'free', message: 'All features unlocked!' };
-});
+    const license = store.get('license', null);
+    if (license && license.email && license.key) {
+        // Local validation first (fast)
+        const localValid = validateLicenseKey(license.email, license.key);
+        if (!localValid) {
+            return { email: license.email, key: license.key, isValid: false };
+        }
+        
+        // Online validation (check revocation) - async, don't block
+        validateLicenseOnline(license.email, license.key).then(result => {
+            if (result.valid === false && !result.offline) {
+                // License was revoked - clear it
+                store.delete('license');
+            }
+        }).catch(() => {});
+        
+        return { ...license, isValid: true };
     }
     return { email: null, key: null, isValid: false };
 });

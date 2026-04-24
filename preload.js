@@ -63,31 +63,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFastEncode: () => ipcRenderer.invoke('get-fast-encode'),
     setFastEncode: (enabled) => ipcRenderer.invoke('set-fast-encode', enabled),
     
-    // Cloud Storage - disabled
+    // Cloud sync (Pro)
     getCloudConfig: () => ipcRenderer.invoke('get-cloud-config'),
     setCloudConfig: (config) => ipcRenderer.invoke('set-cloud-config', config),
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
     
-    // Cloud Storage - disabled
-    cloudStorageUpload: (filePath) => Promise.resolve({ success: false }),
-    cloudStorageList: () => Promise.resolve({ files: [] }),
-    cloudStorageDownload: (key, filename) => Promise.resolve({ success: false }),
-    cloudStorageDelete: (key) => Promise.resolve({ success: false }),
-    cloudStorageUsage: () => Promise.resolve({ used: 0 }),
-    cloudStorageShare: (key, expiresIn) => Promise.resolve({ success: false }),
-    cloudStorageUnshare: (key) => Promise.resolve({ success: false }),
-    cloudStoragePreviewUrl: (key) => Promise.resolve({ success: false }),
+    // Cloud Storage (Pro+) - R2-based storage
+    cloudStorageUpload: (filePath) => ipcRenderer.invoke('cloud-storage-upload', filePath),
+    cloudStorageList: () => ipcRenderer.invoke('cloud-storage-list'),
+    cloudStorageDownload: (key, filename) => ipcRenderer.invoke('cloud-storage-download', key, filename),
+    cloudStorageDelete: (key) => ipcRenderer.invoke('cloud-storage-delete', key),
+    cloudStorageUsage: () => ipcRenderer.invoke('cloud-storage-usage'),
+    // Shareable links
+    cloudStorageShare: (key, expiresIn) => ipcRenderer.invoke('cloud-storage-share', { key, expiresIn }),
+    cloudStorageUnshare: (key) => ipcRenderer.invoke('cloud-storage-unshare', key),
+    // Preview URL
+    cloudStoragePreviewUrl: (key) => ipcRenderer.invoke('cloud-storage-preview-url', key),
+    // Copy to clipboard
     copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
     
-    // Pro+ Features - disabled
-    cloudUploadThumbnail: (videoKey, thumbnailPath) => Promise.resolve({ success: false }),
-    cloudSetDownloadEnabled: (videoKey, enabled) => Promise.resolve({ success: false }),
+    // Pro+ Features
+    cloudUploadThumbnail: (videoKey, thumbnailPath) => ipcRenderer.invoke('cloud-upload-thumbnail', { videoKey, thumbnailPath }),
+    cloudSetDownloadEnabled: (videoKey, enabled) => ipcRenderer.invoke('cloud-set-download-enabled', { videoKey, enabled }),
     
-    // Pro Max Features - disabled
-    cloudGetEmbedCode: (videoKey) => Promise.resolve({ success: false }),
-    cloudGetVideoAnalytics: (videoKey) => Promise.resolve({ success: false }),
+    // Pro Max Features
+    cloudGetEmbedCode: (videoKey) => ipcRenderer.invoke('cloud-get-embed-code', videoKey),
+    cloudGetVideoAnalytics: (videoKey) => ipcRenderer.invoke('cloud-get-video-analytics', videoKey),
     
-    // YouTube/Vimeo Export - opens browser
+    // YouTube/Vimeo Export (Pro+)
     exportToYouTube: (filePath) => ipcRenderer.invoke('export-to-youtube', filePath),
     exportToVimeo: (filePath) => ipcRenderer.invoke('export-to-vimeo', filePath),
     

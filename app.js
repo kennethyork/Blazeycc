@@ -1197,17 +1197,6 @@ async function toggleSettingsPanel() {
     elements.settingsPanel.style.display = isVisible ? 'none' : 'block';
     elements.historyPanel.style.display = 'none';
     elements.cloudLibraryPanel.style.display = 'none';
-    
-    // Load cloud storage usage for Pro users
-    if (!isVisible) {
-        const isPro = await window.electronAPI.isProLicensed();
-        if (isPro) {
-            const usage = await window.electronAPI.cloudStorageUsage();
-            if (usage.success) {
-                updateStorageDisplay(usage);
-            }
-        }
-    }
 }
 
 async function loadSavePath() {

@@ -1,6 +1,6 @@
 {
   "name": "blazeycc",
-  "version": "1.3.3",
+  "version": "1.3.5",
   "description": "Record any website as video",
   "main": "main.js",
   "scripts": {
@@ -18,8 +18,7 @@
     "electron"
   ],
   "author": {
-    "name": "theKennethy",
-    "email": "thekennethy@github.com"
+    "name": "kennethyork"
   },
   "homepage": "https://github.com/blazeycc/Blazeycc",
   "repository": {
@@ -75,7 +74,7 @@
       ],
       "category": "Utility",
       "icon": "build/icon.png",
-      "maintainer": "theKennethy <thekennethy@github.com>",
+      "maintainer": "kennethyork",
       "artifactName": "${productName}.${ext}"
     },
     "win": {

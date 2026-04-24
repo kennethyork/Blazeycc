@@ -22,7 +22,7 @@
                 <button id="themeToggleBtn" class="btn btn-icon" title="Toggle Theme">🌙</button>
                 <button id="historyBtn" class="btn btn-icon" title="Recording History">📁 History</button>
                 <button id="cloudLibraryBtn" class="btn btn-icon pro-btn-locked" title="Cloud Library (Pro+ $7/mo)" style="display: none;">☁️ Cloud</button>
-                <button id="settingsBtn" class="btn btn-icon" title="Settings">⚙️</button>
+                <button id="settingsBtn" class="btn btn-icon" title="Save Location">📁</button>
             </div>
         </header>
 
@@ -243,15 +243,14 @@
         <!-- Settings Panel (hidden by default) -->
         <section class="settings-panel" id="settingsPanel" style="display: none;">
             <div class="panel-header">
-                <h3>⚙️ Settings</h3>
+                <h3>📁 Save Location</h3>
                 <button id="closeSettingsBtn" class="btn btn-small">✕ Close</button>
             </div>
             <div class="settings-content">
                 <div class="setting-item">
-                    <label>📁 Save Location</label>
                     <div class="save-path-row">
                         <input type="text" id="savePathInput" readonly>
-                        <button id="changeSavePathBtn" class="btn btn-small">Browse...</button>
+                        <button id="changeSavePathBtn" class="btn btn-primary">📂 Browse...</button>
                     </div>
                 </div>
             </div>

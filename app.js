@@ -311,17 +311,8 @@ async function init() {
     await loadHistory();
     await loadSavePath();
     await loadLicense();
-    
-    // License event listeners
-    document.getElementById('activateLicenseBtn')?.addEventListener('click', activateLicense);
-    document.getElementById('deactivateLicenseBtn')?.addEventListener('click', deactivateLicense);
-    document.getElementById('redeemPromoBtn')?.addEventListener('click', redeemPromoCode);
-    document.getElementById('subscribeBtn')?.addEventListener('click', openStripeCheckout);
 
     showNotification('Ready! Enter a URL to get started.', 'info');
-    
-    // Track app start
-    window.electronAPI.trackUsage('app_start', {});
 }
 
 // Get current export settings
@@ -351,13 +342,9 @@ function updateSettingsInfo() {
     const preset = elements.formatPreset.value;
     const format = elements.outputFormat.value;
     
-    // Check if 4K preset selected and user is not Pro
-    const is4kPreset = ['yt-4k', 'vimeo-4k'].includes(preset);
+    // 4K is free for everyone
     const enable4kCheckbox = document.getElementById('enable4k');
-    if (is4kPreset && (!isProLicensed || (isProLicensed && !enable4kCheckbox?.checked))) {
-        showNotification('4K export requires Pro license', 'warning');
-        elements.formatPreset.value = 'yt-1080p'; // Reset to 1080p
-    }
+    if (enable4kCheckbox) enable4kCheckbox.style.display = 'none';
     
     const { width, height, quality, presetName } = getExportSettings();
     
@@ -845,28 +832,10 @@ function renderHistory() {
                 <span class="history-date">${date}</span>
             </div>
             <div class="history-actions">
-                <button class="btn btn-small btn-upload-cloud pro-plus-btn" data-action="upload" data-path="${record.path}" title="Upload to Cloud (Pro+)" style="display: none;">⬆️</button>
                 <button class="btn btn-small" data-action="open" data-path="${record.path}">📂 Show</button>
                 <button class="btn btn-small btn-danger" data-action="delete" data-path="${record.path}">🗑️</button>
             </div>
         `;
-        
-        // Show upload button for Pro+ users only
-        if (isProPlusLicensed) {
-            const uploadBtn = item.querySelector('[data-action="upload"]');
-            if (uploadBtn) uploadBtn.style.display = '';
-        }
-        
-        item.querySelector('[data-action="upload"]')?.addEventListener('click', async (e) => {
-            const filePath = e.target.dataset.path;
-            showNotification('Uploading to cloud...', 'info');
-            const result = await uploadToCloud(filePath);
-            if (result.success) {
-                showNotification('Uploaded to cloud!', 'success');
-            } else {
-                showNotification(result.error || 'Upload failed', 'error');
-            }
-        });
         
         item.querySelector('[data-action="open"]').addEventListener('click', () => {
             window.electronAPI.openInFolder(record.path);
@@ -1365,249 +1334,28 @@ function stopAutoScroll() {
     }
 }
 
-// License management
-let isProLicensed = false;
-let isProPlusLicensed = false;
-let licenseTier = null;
+// License management - ALL FEATURES ARE FREE
+const isProLicensed = true;
+const isProPlusLicensed = true;
+const licenseTier = 'pro+';
 
 async function loadLicense() {
-    try {
-        const license = await window.electronAPI.getLicense();
-        if (license && license.isValid) {
-            isProLicensed = true;
-            licenseTier = await window.electronAPI.getLicenseTier();
-            isProPlusLicensed = licenseTier === 'pro+';
-            showLicenseActive(license.email, licenseTier);
-            unlockProFeatures();
-            if (isProPlusLicensed) {
-                unlockProPlusFeatures();
-            }
-        } else {
-            isProLicensed = false;
-            isProPlusLicensed = false;
-            licenseTier = null;
-            showLicenseInactive();
-        }
-    } catch (error) {
-        console.error('Error loading license:', error);
-    }
+    // All features are free, no license needed
+    unlockProFeatures();
+    unlockProPlusFeatures();
 }
 
-function showLicenseActive(email, tier) {
-    const inactiveSection = document.getElementById('licenseInactive');
-    const activeSection = document.getElementById('licenseActive');
-    const emailDisplay = document.getElementById('licenseEmailDisplay');
-    const tierDisplay = document.getElementById('licenseTierDisplay');
-    const successText = document.getElementById('licenseSuccessText');
-    
-    if (inactiveSection) inactiveSection.style.display = 'none';
-    if (activeSection) activeSection.style.display = 'block';
-    if (emailDisplay) emailDisplay.textContent = email;
-    if (tierDisplay) tierDisplay.textContent = tier === 'pro+' ? 'Pro+' : 'Pro';
-    if (successText) successText.textContent = tier === 'pro+' ? '✅ Pro+ License Active' : '✅ Pro License Active';
-}
+function unlockProFeatures() {}
+function unlockProPlusFeatures() {}
+function lockProPlusFeatures() {}
+function lockProFeatures() {}
 
-function showLicenseInactive() {
-    const inactiveSection = document.getElementById('licenseInactive');
-    const activeSection = document.getElementById('licenseActive');
-    
-    if (inactiveSection) inactiveSection.style.display = 'block';
-    if (activeSection) activeSection.style.display = 'none';
-}
-
-function unlockProFeatures() {
-    const proSection = document.querySelector('.pro-section');
-    if (proSection) {
-        proSection.classList.add('pro-unlocked');
-    }
-    
-    // Enable Pro checkboxes (except cloud storage which is Pro+)
-    const proCheckboxes = document.querySelectorAll('.pro-feature input:not(#enableCloudSync)');
-    proCheckboxes.forEach(cb => {
-        cb.disabled = false;
-    });
-}
-
-function unlockProPlusFeatures() {
-    // Unlock cloud library button (Pro+ only)
-    if (elements.cloudLibraryBtn) {
-        elements.cloudLibraryBtn.classList.remove('pro-btn-locked');
-        elements.cloudLibraryBtn.classList.add('unlocked');
-    }
-    
-    // Enable cloud sync checkbox
-    const cloudSyncCheckbox = document.getElementById('enableCloudSync');
-    if (cloudSyncCheckbox) {
-        cloudSyncCheckbox.disabled = false;
-    }
-    
-    // Show cloud storage section
-    const cloudSyncSection = document.getElementById('cloudSyncSection');
-    if (cloudSyncSection) {
-        cloudSyncSection.style.display = 'block';
-    }
-}
-
-function lockProPlusFeatures() {
-    // Lock cloud library button
-    if (elements.cloudLibraryBtn) {
-        elements.cloudLibraryBtn.classList.add('pro-btn-locked');
-        elements.cloudLibraryBtn.classList.remove('unlocked');
-    }
-    
-    // Disable cloud sync checkbox
-    const cloudSyncCheckbox = document.getElementById('enableCloudSync');
-    if (cloudSyncCheckbox) {
-        cloudSyncCheckbox.disabled = true;
-        cloudSyncCheckbox.checked = false;
-    }
-    
-    // Hide cloud storage section
-    const cloudSyncSection = document.getElementById('cloudSyncSection');
-    if (cloudSyncSection) {
-        cloudSyncSection.style.display = 'none';
-    }
-}
-
-function lockProFeatures() {
-    const proSection = document.querySelector('.pro-section');
-    if (proSection) {
-        proSection.classList.remove('pro-unlocked');
-    }
-    
-    // Disable Pro checkboxes
-    const proCheckboxes = document.querySelectorAll('.pro-feature input');
-    proCheckboxes.forEach(cb => {
-        cb.disabled = true;
-        cb.checked = false;
-    });
-    
-    // Also lock Pro+ features
-    lockProPlusFeatures();
-}
-
-async function activateLicense() {
-    const emailInput = document.getElementById('licenseEmail');
-    const keyInput = document.getElementById('licenseKey');
-    
-    const email = emailInput?.value?.trim();
-    const key = keyInput?.value?.trim();
-    
-    if (!email || !key) {
-        showNotification('Please enter both email and license key', 'error');
-        return;
-    }
-    
-    try {
-        showNotification('Verifying license...', 'info');
-        const result = await window.electronAPI.setLicense(email, key);
-        if (result.success) {
-            isProLicensed = true;
-            licenseTier = result.tier || 'pro';
-            isProPlusLicensed = licenseTier === 'pro+';
-            showLicenseActive(email, licenseTier);
-            unlockProFeatures();
-            if (isProPlusLicensed) {
-                unlockProPlusFeatures();
-            }
-            showNotification('🎉 ' + result.message, 'success');
-        } else {
-            showNotification(result.message || 'Invalid license key', 'error');
-        }
-    } catch (error) {
-        showNotification('Error activating license: ' + error.message, 'error');
-    }
-}
-
-async function deactivateLicense() {
-    try {
-        await window.electronAPI.clearLicense();
-        isProLicensed = false;
-        showLicenseInactive();
-        lockProFeatures();
-        showNotification('License deactivated', 'info');
-        
-        // Clear inputs
-        const emailInput = document.getElementById('licenseEmail');
-        const keyInput = document.getElementById('licenseKey');
-        if (emailInput) emailInput.value = '';
-        if (keyInput) keyInput.value = '';
-    } catch (error) {
-        showNotification('Error deactivating license', 'error');
-    }
-}
-
-async function redeemPromoCode() {
-    const emailInput = document.getElementById('licenseEmail');
-    const promoInput = document.getElementById('promoCode');
-    
-    const email = emailInput?.value?.trim();
-    const code = promoInput?.value?.trim();
-    
-    if (!email) {
-        showNotification('Please enter your email first', 'error');
-        emailInput?.focus();
-        return;
-    }
-    
-    if (!code) {
-        showNotification('Please enter a promo code', 'error');
-        promoInput?.focus();
-        return;
-    }
-    
-    try {
-        showNotification('Redeeming promo code...', 'info');
-        const result = await window.electronAPI.redeemPromo(email, code);
-        
-        if (result.success) {
-            isProLicensed = true;
-            showLicenseActive(email);
-            unlockProFeatures();
-            showNotification('🎉 ' + result.message, 'success');
-            
-            // Clear promo input
-            if (promoInput) promoInput.value = '';
-        } else {
-            showNotification(result.message || 'Invalid promo code', 'error');
-        }
-    } catch (error) {
-        showNotification('Error redeeming promo code: ' + error.message, 'error');
-    }
-}
-
-async function openStripeCheckout() {
-    const emailInput = document.getElementById('licenseEmail');
-    const email = emailInput?.value?.trim();
-    
-    if (!email) {
-        showNotification('Please enter your email first', 'error');
-        emailInput?.focus();
-        return;
-    }
-    
-    try {
-        showNotification('Opening checkout...', 'info');
-        const result = await window.electronAPI.createStripeCheckout(email, 'pro');
-        
-        if (result.url) {
-            // Open Stripe checkout in default browser
-            window.electronAPI.openExternal(result.url);
-            showNotification('Checkout opened in your browser', 'success');
-        } else if (result.error) {
-            showNotification(result.error, 'error');
-        }
-    } catch (error) {
-        // Fallback to website
-        window.electronAPI.openExternal('https://blazeycc.com/pricing');
-        showNotification('Opening pricing page...', 'info');
-    }
-}
-
-// Helper to check if Pro features are enabled
-function isProEnabled() {
-    return isProLicensed;
-}
+// License functions - no longer needed, all features are free
+async function activateLicense() {}
+async function deactivateLicense() {}
+async function redeemPromoCode() {}
+async function openStripeCheckout() {}
+function isProEnabled() { return true; }
 // ========================================
 // BATCH RECORDING (Pro Feature)
 // ========================================

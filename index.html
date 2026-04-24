@@ -238,7 +238,7 @@
         </section>
 
         <!-- Cloud Library Panel (hidden by default, Pro+ feature) -->
-        <section class="cloud-library-panel" id="cloudLibraryPanel" style="display: none;">
+        <section class="cloud-library-panel" id="cloudLibraryPanel" style="display: none;"></section>
 
         <!-- Settings Panel (hidden by default) -->
         <section class="settings-panel" id="settingsPanel" style="display: none;">
@@ -251,6 +251,7 @@
                     <div class="save-path-row">
                         <input type="text" id="savePathInput" readonly>
                         <button id="changeSavePathBtn" class="btn btn-primary">📂 Browse...</button>
+                        <input type="file" id="folderPickerFallback" webkitdirectory directory style="display:none" />
                     </div>
                 </div>
             </div>
@@ -295,5 +296,56 @@
     </div>
 
     <script src="app.js"></script>
+    <script>
+        // Direct fallback for browse button
+        document.addEventListener('DOMContentLoaded', function() {
+            var btn = document.getElementById('changeSavePathBtn');
+            var fileInput = document.getElementById('folderPickerFallback');
+            var savePathInput = document.getElementById('savePathInput');
+
+            if (btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Browse button clicked (inline handler)');
+
+                    // Try IPC first
+                    if (window.electronAPI && window.electronAPI.selectSaveFolder) {
+                        window.electronAPI.selectSaveFolder().then(function(result) {
+                            console.log('Dialog result:', result);
+                            if (result.success) {
+                                savePathInput.value = result.path;
+                            }
+                        }).catch(function(err) {
+                            console.error('IPC dialog error, trying fallback:', err);
+                            // Trigger hidden file input as fallback
+                            if (fileInput) fileInput.click();
+                        });
+                    } else {
+                        // No IPC available, use file input fallback
+                        console.log('No IPC, using file input fallback');
+                        if (fileInput) fileInput.click();
+                    }
+                });
+            }
+
+            // Handle file input fallback selection
+            if (fileInput) {
+                fileInput.addEventListener('change', function(e) {
+                    if (e.target.files && e.target.files.length > 0) {
+                        // In Electron, files have .path property
+                        var path = e.target.files[0].path;
+                        if (path) {
+                            savePathInput.value = path;
+                            // Also update via IPC if available
+                            if (window.electronAPI && window.electronAPI.setSavePath) {
+                                window.electronAPI.setSavePath(path);
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 </html>

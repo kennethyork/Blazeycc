@@ -301,7 +301,7 @@ async function init() {
     // Settings panel
     elements.settingsBtn.addEventListener('click', toggleSettingsPanel);
     elements.closeSettingsBtn.addEventListener('click', () => elements.settingsPanel.style.display = 'none');
-    document.getElementById('changeSavePathBtn')?.addEventListener('click', changeSavePath);
+    elements.changeSavePathBtn.addEventListener('click', doBrowseFolder);
     
     // Initialize settings display
     updateSettingsInfo();
@@ -1204,11 +1204,33 @@ async function loadSavePath() {
     elements.savePathInput.value = savePath;
 }
 
-async function changeSavePath() {
-    const result = await window.electronAPI.selectSaveFolder();
-    if (result.success) {
-        elements.savePathInput.value = result.path;
-        showNotification('Save location updated', 'success');
+// Click handler for browse folder
+function doBrowseFolder() {
+    console.log('doBrowseFolder clicked');
+    var fileInput = document.getElementById('folderPickerFallback');
+
+    if (window.electronAPI && typeof window.electronAPI.selectSaveFolder === 'function') {
+        console.log('electronAPI available, calling selectSaveFolder...');
+        window.electronAPI.selectSaveFolder()
+            .then(function(result) {
+                console.log('selectSaveFolder result:', result);
+                if (result.success) {
+                    elements.savePathInput.value = result.path;
+                    showNotification('Save location updated', 'success');
+                } else if (result.error) {
+                    showNotification('Error: ' + result.error, 'error');
+                }
+            })
+            .catch(function(err) {
+                console.error('Browse folder error, trying fallback:', err);
+                if (fileInput) fileInput.click();
+            });
+    } else if (fileInput) {
+        console.log('No IPC, using file input fallback');
+        fileInput.click();
+    } else {
+        console.error('electronAPI and file input fallback not available');
+        showNotification('Folder picker not available', 'error');
     }
 }
 
@@ -2354,144 +2376,148 @@ async function mergeAnnotationsWithFrame(frameData) {
 // AUDIO CAPTURE FUNCTIONS
 // =====================
 
-// Audio capture state
-let audioStream = null;
-let audioRecorder = null;
-let audioChunks = [];
-
-// Start capturing system/tab audio using desktopCapturer
+// Start capturing audio from the webview (website audio, not system audio)
 async function startAudioCapture() {
+    const webview = elements.webview;
+    if (!webview || webview.style.display === 'none') {
+        console.log('No webview available for audio capture');
+        return;
+    }
+
     try {
-        // Get the main window source from desktopCapturer
-        const sourceResult = await window.electronAPI.getWebviewSource();
-        if (!sourceResult.success) {
-            console.log('Could not get window source for audio capture');
-            return;
-        }
-        
-        // Request audio stream using desktopCapturer
-        // This captures system audio on macOS/Windows, requires PulseAudio loopback on Linux
-        try {
-            audioStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        chromeMediaSourceId: sourceResult.sourceId
+        // Inject audio capture into the webview using Web Audio API
+        const result = await webview.executeJavaScript(`
+            (function() {
+                if (window.__blazeyccAudioRecorder) return 'already_started';
+
+                try {
+                    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    var dest = audioCtx.createMediaStreamDestination();
+                    window.__blazeyccAudioCtx = audioCtx;
+                    window.__blazeyccAudioDest = dest;
+                    window.__blazeyccAudioChunks = [];
+
+                    // Connect a media element to the capture graph
+                    var connectEl = function(el) {
+                        if (el.__blazeyccConnected) return;
+                        try {
+                            var src = audioCtx.createMediaElementSource(el);
+                            src.connect(dest);
+                            src.connect(audioCtx.destination); // keep audible
+                            el.__blazeyccConnected = true;
+                        } catch(e) {}
+                    };
+
+                    // Hook up existing audio/video elements
+                    document.querySelectorAll('audio, video').forEach(connectEl);
+
+                    // Watch for dynamically added elements
+                    var observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            mutation.addedNodes.forEach(function(node) {
+                                if (node.tagName === 'AUDIO' || node.tagName === 'VIDEO') {
+                                    connectEl(node);
+                                }
+                                if (node.querySelectorAll) {
+                                    node.querySelectorAll('audio, video').forEach(connectEl);
+                                }
+                            });
+                        });
+                    });
+                    if (document.body) {
+                        observer.observe(document.body, { childList: true, subtree: true });
                     }
-                },
-                video: {
-                    mandatory: {
-                        chromeMediaSource: 'desktop',
-                        chromeMediaSourceId: sourceResult.sourceId,
-                        maxWidth: 1,
-                        maxHeight: 1
-                    }
+                    window.__blazeyccAudioObserver = observer;
+
+                    // Start recording the captured stream
+                    var recorder = new MediaRecorder(dest.stream, { mimeType: 'audio/webm;codecs=opus' });
+                    window.__blazeyccAudioRecorder = recorder;
+                    recorder.ondataavailable = function(e) {
+                        if (e.data.size > 0) window.__blazeyccAudioChunks.push(e.data);
+                    };
+                    recorder.start(1000);
+                    return 'started';
+                } catch(e) {
+                    return 'error: ' + e.message;
                 }
-            });
-            
-            // We only need the audio track, stop video
-            audioStream.getVideoTracks().forEach(track => track.stop());
-            
-            // Create audio-only stream
-            const audioTracks = audioStream.getAudioTracks();
-            if (audioTracks.length === 0) {
-                console.log('No audio track available in system capture');
-                showNotification('Audio capture not available on this system', 'warning');
-                return;
-            }
-            
-            const audioOnlyStream = new MediaStream(audioTracks);
-            
-            // Start recording
-            audioChunks = [];
-            audioRecorder = new MediaRecorder(audioOnlyStream, { 
-                mimeType: 'audio/webm;codecs=opus' 
-            });
-            
-            audioRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    audioChunks.push(e.data);
-                }
-            };
-            
-            audioRecorder.start(1000); // Collect in 1-second chunks
+            })()
+        `, true);
+
+        if (result === 'started') {
             state.audioMediaRecorder = true;
-            console.log('System audio capture started');
-            
-        } catch (streamError) {
-            console.log('System audio not available:', streamError.message);
-            // On Linux, this is expected without PulseAudio loopback configuration
-            if (navigator.platform.includes('Linux')) {
-                showNotification('Audio requires PulseAudio loopback setup on Linux', 'warning');
-            } else {
-                showNotification('System audio capture failed', 'warning');
-            }
+            console.log('Webview audio capture started');
+        } else if (result === 'already_started') {
+            console.log('Webview audio capture already running');
+        } else {
+            console.log('Webview audio capture failed:', result);
         }
-        
     } catch (error) {
-        console.error('Failed to start audio capture:', error);
+        console.error('Failed to start webview audio capture:', error);
     }
 }
 
 // Stop audio capture and return the audio file path
 async function stopAudioCapture() {
+    const webview = elements.webview;
+    if (!webview || !state.audioMediaRecorder) {
+        return null;
+    }
+
     try {
-        if (!audioRecorder || !state.audioMediaRecorder) {
-            return null;
-        }
-        
-        return new Promise(async (resolve) => {
-            audioRecorder.onstop = async () => {
-                try {
-                    // Combine chunks into a blob
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    
-                    if (audioBlob.size === 0) {
-                        console.log('No audio data captured');
+        // Stop recorder in webview and get base64 data back
+        const base64Data = await webview.executeJavaScript(`
+            new Promise(function(resolve) {
+                var recorder = window.__blazeyccAudioRecorder;
+                if (!recorder) {
+                    resolve(null);
+                    return;
+                }
+
+                recorder.onstop = function() {
+                    var blob = new Blob(window.__blazeyccAudioChunks, { type: 'audio/webm' });
+
+                    // Clean up
+                    if (window.__blazeyccAudioObserver) {
+                        window.__blazeyccAudioObserver.disconnect();
+                        window.__blazeyccAudioObserver = null;
+                    }
+                    if (window.__blazeyccAudioCtx) {
+                        window.__blazeyccAudioCtx.close();
+                        window.__blazeyccAudioCtx = null;
+                    }
+                    window.__blazeyccAudioRecorder = null;
+                    window.__blazeyccAudioDest = null;
+
+                    if (blob.size === 0) {
                         resolve(null);
                         return;
                     }
-                    
-                    // Convert to base64
-                    const reader = new FileReader();
-                    reader.onloadend = async () => {
-                        const base64 = reader.result.split(',')[1];
-                        
-                        // Save via main process
-                        const startResult = await window.electronAPI.startAudioCapture();
-                        if (startResult.success) {
-                            await window.electronAPI.saveAudioChunk(base64);
-                            const stopResult = await window.electronAPI.stopAudioCapture();
-                            if (stopResult.success) {
-                                console.log('Audio saved to:', stopResult.audioPath);
-                                resolve(stopResult.audioPath);
-                                return;
-                            }
-                        }
-                        resolve(null);
+
+                    var reader = new FileReader();
+                    reader.onloadend = function() {
+                        resolve(reader.result.split(',')[1]);
                     };
-                    reader.readAsDataURL(audioBlob);
-                    
-                } catch (e) {
-                    console.error('Failed to process audio:', e);
-                    resolve(null);
+                    reader.readAsDataURL(blob);
+                };
+
+                recorder.stop();
+            })
+        `, true);
+
+        if (base64Data) {
+            const startResult = await window.electronAPI.startAudioCapture();
+            if (startResult.success) {
+                await window.electronAPI.saveAudioChunk(base64Data);
+                const stopResult = await window.electronAPI.stopAudioCapture();
+                if (stopResult.success) {
+                    console.log('Audio saved to:', stopResult.audioPath);
+                    return stopResult.audioPath;
                 }
-            };
-            
-            // Stop recording
-            audioRecorder.stop();
-            state.audioMediaRecorder = null;
-            
-            // Stop and release audio stream
-            if (audioStream) {
-                audioStream.getTracks().forEach(track => track.stop());
-                audioStream = null;
             }
-            audioRecorder = null;
-        });
-        
+        }
     } catch (error) {
-        console.error('Failed to stop audio capture:', error);
-        return null;
+        console.error('Failed to stop webview audio capture:', error);
     }
+
+    return null;
 }

@@ -852,17 +852,32 @@ ipcMain.handle('set-save-path', async (event, newPath) => {
 });
 
 ipcMain.handle('select-save-folder', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, {
-        properties: ['openDirectory', 'createDirectory'],
-        defaultPath: store.get('savePath')
-    });
-    
-    if (!result.canceled && result.filePaths.length > 0) {
-        const newPath = result.filePaths[0];
-        store.set('savePath', newPath);
-        return { success: true, path: newPath };
+    console.log('IPC: select-save-folder called');
+    try {
+        // Use focused window or fall back to mainWindow
+        const { BrowserWindow } = require('electron');
+        let parentWindow = BrowserWindow.getFocusedWindow();
+        if (!parentWindow && mainWindow && !mainWindow.isDestroyed()) {
+            parentWindow = mainWindow;
+            parentWindow.focus();
+        }
+        console.log('Opening dialog with parentWindow:', !!parentWindow);
+        const result = await dialog.showOpenDialog(parentWindow, {
+            properties: ['openDirectory', 'createDirectory'],
+            defaultPath: store.get('savePath')
+        });
+        console.log('Dialog result:', result);
+
+        if (!result.canceled && result.filePaths.length > 0) {
+            const newPath = result.filePaths[0];
+            store.set('savePath', newPath);
+            return { success: true, path: newPath };
+        }
+        return { success: false };
+    } catch (err) {
+        console.error('select-save-folder error:', err);
+        return { success: false, error: err.message };
     }
-    return { success: false };
 });
 
 // Open file in system file manager
@@ -1572,6 +1587,10 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                 ]);
             }
             
+            // Determine video map source
+            const usesComplexFilter = hasWatermark; // complexFilter outputs [out]
+            const videoMap = usesComplexFilter ? '[out]' : '0:v';
+
             // Output format settings
             if (outputFormat === 'mp4') {
                 const outputOpts = [
@@ -1579,14 +1598,14 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                     '-preset', useFastEncode ? 'fast' : 'medium',
                     '-crf', quality === 'high' ? '18' : quality === 'medium' ? '23' : '28'
                 ];
-                
+
                 // Add audio codec if we have audio
                 if (hasAudio) {
                     outputOpts.push('-c:a', 'aac', '-b:a', '128k');
-                    outputOpts.push('-map', '0:v', '-map', '1:a');
+                    outputOpts.push('-map', videoMap, '-map', '1:a');
                     outputOpts.push('-shortest'); // End when shortest stream ends
                 }
-                
+
                 command = command
                     .videoCodec('libx264')
                     .outputOptions(outputOpts);
@@ -1595,13 +1614,13 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                     '-crf', quality === 'high' ? '20' : quality === 'medium' ? '30' : '40',
                     '-b:v', '0'
                 ];
-                
+
                 if (hasAudio) {
                     outputOpts.push('-c:a', 'libopus', '-b:a', '128k');
-                    outputOpts.push('-map', '0:v', '-map', '1:a');
+                    outputOpts.push('-map', videoMap, '-map', '1:a');
                     outputOpts.push('-shortest');
                 }
-                
+
                 command = command
                     .videoCodec('libvpx-vp9')
                     .outputOptions(outputOpts);

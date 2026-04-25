@@ -1867,42 +1867,37 @@ function applyFabricTheme() {
     const isDark = state.theme === 'dark';
     const accent = '#4a90d9';
     const cornerBg = isDark ? '#2a2a3e' : '#ffffff';
-    const cornerBorder = isDark ? '#4a90d9' : '#357abd';
-    const selectionBg = isDark ? 'rgba(74, 144, 217, 0.15)' : 'rgba(74, 144, 217, 0.1)';
+    const cornerBorder = accent;
+    const selectionBg = isDark ? 'rgba(74, 144, 217, 0.12)' : 'rgba(74, 144, 217, 0.08)';
     const textColor = isDark ? '#ffffff' : '#1a1a2e';
     
-    // Object defaults (shapes, text, etc.)
-    fabric.Object.prototype.set({
-        borderColor: accent,
-        cornerColor: cornerBg,
-        cornerStrokeColor: cornerBorder,
-        cornerStyle: 'circle',
-        cornerSize: 10,
-        transparentCorners: false,
-        borderScaleFactor: 2,
-        selectionBackgroundColor: selectionBg,
-        padding: 4
-    });
+    // Object defaults (shapes, text, etc.) — set on prototype directly
+    const objProto = fabric.Object.prototype;
+    objProto.borderColor = accent;
+    objProto.cornerColor = cornerBg;
+    objProto.cornerStrokeColor = cornerBorder;
+    objProto.cornerStyle = 'circle';
+    objProto.cornerSize = 9;
+    objProto.transparentCorners = false;
+    objProto.borderScaleFactor = 1.5;
+    objProto.selectionBackgroundColor = selectionBg;
+    objProto.padding = 3;
     
     // Active selection (multi-select)
-    fabric.ActiveSelection.prototype.set({
-        borderColor: accent,
-        cornerColor: cornerBg,
-        cornerStrokeColor: cornerBorder
-    });
+    const selProto = fabric.ActiveSelection.prototype;
+    selProto.borderColor = accent;
+    selProto.cornerColor = cornerBg;
+    selProto.cornerStrokeColor = cornerBorder;
     
     // Text defaults
-    fabric.Textbox.prototype.set({
-        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
-        fill: textColor
-    });
+    const txtProto = fabric.Textbox.prototype;
+    txtProto.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    txtProto.fill = textColor;
     
     // Canvas defaults
-    fabric.Canvas.prototype.set({
-        selectionColor: selectionBg,
-        selectionBorderColor: accent,
-        selectionLineWidth: 2
-    });
+    fabric.Canvas.prototype.selectionColor = selectionBg;
+    fabric.Canvas.prototype.selectionBorderColor = accent;
+    fabric.Canvas.prototype.selectionLineWidth = 1.5;
 }
 
 function initAnnotations() {
@@ -2238,11 +2233,13 @@ function toggleAnnotationMode() {
     state.annotationEnabled = !state.annotationEnabled;
     const canvas = elements.annotationCanvas;
     const tools = elements.annotationTools;
-    
+    const toolbar = elements.annotationToolbar;
+
     if (state.annotationEnabled) {
         canvas.style.display = 'block';
         canvas.classList.add('active');
         tools.style.display = 'flex';
+        toolbar.style.display = 'flex';
         elements.annotateToggleBtn?.classList.add('active');
         resizeAnnotationCanvas();
         setAnnotationTool(state.annotationTool || 'select');

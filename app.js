@@ -1906,16 +1906,20 @@ function applyFabricTheme() {
 function initAnnotations() {
     const canvas = elements.annotationCanvas;
     const toolbar = elements.annotationToolbar;
-    
+
     if (!canvas || !toolbar) return;
     if (typeof fabric === 'undefined') {
         console.warn('Fabric.js not loaded');
         return;
     }
-    
+
+    // Temporarily show canvas so Fabric.js gets real dimensions on init
+    const wasHidden = canvas.style.display === 'none';
+    if (wasHidden) canvas.style.display = 'block';
+
     // Apply Fabric.js theme defaults
     applyFabricTheme();
-    
+
     // Initialize Fabric canvas
     fabricCanvas = new fabric.Canvas('annotationCanvas', {
         isDrawingMode: false,
@@ -1923,7 +1927,13 @@ function initAnnotations() {
         defaultCursor: 'default',
         backgroundColor: 'transparent'
     });
-    
+
+    // Size to container immediately
+    resizeAnnotationCanvas();
+
+    // Hide again if it was hidden
+    if (wasHidden) canvas.style.display = '';
+
     // Style the Fabric canvas container
     const container = fabricCanvas.wrapperEl;
     if (container) {
@@ -1933,21 +1943,20 @@ function initAnnotations() {
         container.style.width = '100%';
         container.style.height = '100%';
         container.style.zIndex = '100';
-        container.style.pointerEvents = 'none'; // allow scrolling through when annotations off
+        container.style.pointerEvents = 'none';
     }
-    
+
     // Show toolbar for everyone
     checkAnnotationAccess();
-    
+
     // Setup canvas size when webview loads
     elements.webview?.addEventListener('dom-ready', () => {
-        resizeAnnotationCanvas();
-        checkAnnotationAccess();
+        setTimeout(resizeAnnotationCanvas, 100);
     });
-    
+
     // Toggle annotation mode
     elements.annotateToggleBtn?.addEventListener('click', toggleAnnotationMode);
-    
+
     // Tool selection
     document.querySelectorAll('.annotation-tool[data-tool]').forEach(btn => {
         if (btn.dataset.tool !== 'toggle') {
@@ -1958,23 +1967,26 @@ function initAnnotations() {
             });
         }
     });
-    
+
     // Color and size changes
     elements.annotationColor?.addEventListener('change', updateDrawingBrush);
     elements.annotationSize?.addEventListener('change', updateDrawingBrush);
-    
+
     // Clear annotations
     elements.clearAnnotationsBtn?.addEventListener('click', clearAnnotations);
-    
+
     // Undo
     elements.undoAnnotationBtn?.addEventListener('click', undoAnnotation);
-    
+
     // Setup Fabric drawing events
     setupFabricDrawingEvents();
-    
+
     // Window resize
-    window.addEventListener('resize', resizeAnnotationCanvas);
-    
+    window.addEventListener('resize', () => {
+        resizeBrowserViewport(elements.formatPreset.value);
+        resizeAnnotationCanvas();
+    });
+
     // Save initial empty state
     saveAnnotationState();
 }
@@ -2224,14 +2236,23 @@ function clearAnnotations() {
 }
 
 function resizeAnnotationCanvas() {
-    const container = document.getElementById('browserContainer');
-    if (!container || !fabricCanvas) return;
-    
-    const width = container.offsetWidth;
-    const height = container.offsetHeight;
-    
+    const viewport = elements.browserViewport;
+    if (!viewport || !fabricCanvas) return;
+
+    const width = viewport.offsetWidth;
+    const height = viewport.offsetHeight;
+    if (width === 0 || height === 0) return;
+
     // Fabric v7: use setDimensions instead of setWidth/setHeight
     fabricCanvas.setDimensions({ width, height });
+
+    // Also resize the wrapper element explicitly
+    const wrapper = fabricCanvas.wrapperEl;
+    if (wrapper) {
+        wrapper.style.width = width + 'px';
+        wrapper.style.height = height + 'px';
+    }
+
     fabricCanvas.calcOffset();
     fabricCanvas.renderAll();
 }
@@ -2242,10 +2263,11 @@ function toggleAnnotationMode() {
     const tools = elements.annotationTools;
     const toolbar = elements.annotationToolbar;
     const fabricContainer = fabricCanvas?.wrapperEl;
+    const viewport = elements.browserViewport;
 
     if (state.annotationEnabled) {
-        canvas.style.display = 'block';
         canvas.classList.add('active');
+        viewport?.classList.add('annotating');
         tools.style.display = 'flex';
         toolbar.style.display = 'flex';
         elements.annotateToggleBtn?.classList.add('active');
@@ -2255,6 +2277,7 @@ function toggleAnnotationMode() {
         showNotification('Annotation mode enabled — click and drag to draw', 'info');
     } else {
         canvas.classList.remove('active');
+        viewport?.classList.remove('annotating');
         tools.style.display = 'none';
         elements.annotateToggleBtn?.classList.remove('active');
         if (fabricContainer) fabricContainer.style.pointerEvents = 'none';

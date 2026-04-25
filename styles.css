@@ -1410,6 +1410,7 @@ html[data-theme="light"] body {
    ANNOTATION STYLES
    ===================== */
 
+/* Annotation Canvas — starts hidden, shown in annotation mode */
 .annotation-canvas {
     position: absolute;
     top: 0;
@@ -1418,10 +1419,13 @@ html[data-theme="light"] body {
     height: 100%;
     z-index: 100;
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
 }
 
 .annotation-canvas.active {
     pointer-events: auto;
+    opacity: 1;
 }
 
 /* Fabric.js canvas container */
@@ -1432,6 +1436,11 @@ html[data-theme="light"] body {
     width: 100% !important;
     height: 100% !important;
     z-index: 100 !important;
+}
+
+/* When annotations are active, webview becomes non-interactive so canvas gets events */
+.browser-viewport.annotating #webview {
+    pointer-events: none !important;
 }
 
 

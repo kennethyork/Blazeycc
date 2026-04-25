@@ -20,25 +20,26 @@ async function detectGpuEncoder() {
     
     const ffmpegPath = getFFmpegPath();
     if (!ffmpegPath) {
-        detectedGpuEncoder = { available: false, encoder: null, name: null };
+        detectedGpuEncoder = { available: false, h264: null, vp9: null, name: null };
         return detectedGpuEncoder;
     }
     
-    // Test encoders in order: NVIDIA NVENC > AMD AMF > Intel QSV
-    const encoders = [
+    // Test H.264 encoders first (most compatible)
+    const h264Encoders = [
         { codec: 'h264_nvenc', name: 'NVIDIA NVENC' },
         { codec: 'h264_amf', name: 'AMD AMF' },
         { codec: 'h264_qsv', name: 'Intel Quick Sync' }
     ];
     
-    for (const enc of encoders) {
+    let detectedH264 = null;
+    let detectedName = null;
+    
+    for (const enc of h264Encoders) {
         try {
             const testResult = await new Promise((resolve) => {
                 const { execFile } = require('child_process');
                 execFile(ffmpegPath, ['-f', 'lavfi', '-i', 'nullsrc=s=320x240:d=0.1', '-c:v', enc.codec, '-f', 'null', '-'], { timeout: 5000 }, (err, stdout, stderr) => {
-                    if (err && stderr && stderr.includes('not found')) {
-                        resolve(false);
-                    } else if (err && stderr && (stderr.includes('No NVENC') || stderr.includes('init failed') || stderr.includes('not supported'))) {
+                    if (err && stderr && (stderr.includes('not found') || stderr.includes('No NVENC') || stderr.includes('init failed') || stderr.includes('not supported'))) {
                         resolve(false);
                     } else {
                         resolve(true);
@@ -47,17 +48,51 @@ async function detectGpuEncoder() {
             });
             
             if (testResult) {
-                console.log('GPU encoder detected:', enc.name, '(' + enc.codec + ')');
-                detectedGpuEncoder = { available: true, encoder: enc.codec, name: enc.name };
-                return detectedGpuEncoder;
+                detectedH264 = enc.codec;
+                detectedName = enc.name;
+                break;
             }
         } catch (e) {
             // Continue to next encoder
         }
     }
     
-    console.log('No GPU encoder detected, falling back to CPU (libx264)');
-    detectedGpuEncoder = { available: false, encoder: null, name: null };
+    if (!detectedH264) {
+        console.log('No GPU encoder detected, falling back to CPU (libx264)');
+        detectedGpuEncoder = { available: false, h264: null, vp9: null, name: null };
+        return detectedGpuEncoder;
+    }
+    
+    // Also test VP9 GPU encoder for WebM support
+    // Map H.264 encoder to corresponding VP9 encoder
+    let detectedVp9 = null;
+    if (detectedH264 === 'h264_nvenc') {
+        detectedVp9 = 'vp9_nvenc';
+    } else if (detectedH264 === 'h264_qsv') {
+        detectedVp9 = 'vp9_qsv';
+    }
+    // AMD doesn't have VP9 hardware encoding
+    
+    if (detectedVp9) {
+        try {
+            const vp9Test = await new Promise((resolve) => {
+                const { execFile } = require('child_process');
+                execFile(ffmpegPath, ['-f', 'lavfi', '-i', 'nullsrc=s=320x240:d=0.1', '-c:v', detectedVp9, '-f', 'null', '-'], { timeout: 5000 }, (err, stdout, stderr) => {
+                    if (err && stderr && (stderr.includes('not found') || stderr.includes('No NVENC') || stderr.includes('init failed') || stderr.includes('not supported'))) {
+                        resolve(false);
+                    } else {
+                        resolve(true);
+                    }
+                });
+            });
+            if (!vp9Test) detectedVp9 = null;
+        } catch (e) {
+            detectedVp9 = null;
+        }
+    }
+    
+    console.log('GPU encoder detected:', detectedName, '- H.264:', detectedH264, '- VP9:', detectedVp9 || 'not available');
+    detectedGpuEncoder = { available: true, h264: detectedH264, vp9: detectedVp9, name: detectedName };
     return detectedGpuEncoder;
 }
 
@@ -1055,9 +1090,11 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
         // Check GPU encoding preference
         const gpuEncodingEnabled = store.get('gpuEncoding', false);
         const gpuEncoder = gpuEncodingEnabled ? await detectGpuEncoder() : { available: false };
-        const useGpu = gpuEncoder.available && outputFormat === 'mp4'; // GPU only for MP4 currently
+        const useGpu = gpuEncoder.available;
+        const gpuH264 = useGpu ? gpuEncoder.h264 : null;
+        const gpuVp9 = useGpu ? gpuEncoder.vp9 : null;
         
-        console.log('GPU encoding:', { enabled: gpuEncodingEnabled, available: gpuEncoder.available, encoder: gpuEncoder.encoder, name: gpuEncoder.name });
+        console.log('GPU encoding:', { enabled: gpuEncodingEnabled, available: gpuEncoder.available, h264: gpuH264, vp9: gpuVp9, name: gpuEncoder.name });
         
         return new Promise((resolve, reject) => {
             let command = ffmpeg()
@@ -1101,9 +1138,9 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
             if (outputFormat === 'mp4') {
                 let outputOpts;
                 
-                if (useGpu) {
-                    // GPU hardware encoding
-                    const encoder = gpuEncoder.encoder; // h264_nvenc, h264_amf, or h264_qsv
+                if (useGpu && gpuH264) {
+                    // GPU hardware encoding (H.264)
+                    const encoder = gpuH264;
                     
                     if (encoder === 'h264_nvenc') {
                         // NVIDIA NVENC
@@ -1165,25 +1202,61 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                         .outputOptions(outputOpts);
                 }
             } else if (outputFormat === 'webm') {
-                const outputOpts = [
-                    '-crf', quality === 'high' ? '20' : quality === 'medium' ? '30' : '40',
-                    '-b:v', '0'
-                ];
+                let outputOpts;
                 
-                if (hasAudio) {
-                    outputOpts.push('-c:a', 'libopus', '-b:a', '128k');
-                    outputOpts.push('-map', '0:v', '-map', '1:a');
-                    outputOpts.push('-shortest');
+                if (useGpu && gpuVp9) {
+                    // GPU hardware encoding (VP9)
+                    const encoder = gpuVp9;
+                    
+                    if (encoder === 'vp9_nvenc') {
+                        // NVIDIA NVENC VP9
+                        const preset = quality === 'high' ? 'p7' : quality === 'medium' ? 'p4' : 'p2';
+                        const cq = quality === 'high' ? '18' : quality === 'medium' ? '23' : '28';
+                        outputOpts = [
+                            '-pix_fmt', 'yuv420p',
+                            '-preset', preset,
+                            '-cq', cq,
+                            '-rc', 'vbr'
+                        ];
+                    } else if (encoder === 'vp9_qsv') {
+                        // Intel Quick Sync VP9
+                        outputOpts = [
+                            '-pix_fmt', 'yuv420p',
+                            '-global_quality', quality === 'high' ? '18' : quality === 'medium' ? '23' : '28'
+                        ];
+                    }
+                    
+                    if (hasAudio) {
+                        outputOpts.push('-c:a', 'libopus', '-b:a', '128k');
+                        outputOpts.push('-map', '0:v', '-map', '1:a');
+                        outputOpts.push('-shortest');
+                    }
+                    
+                    command = command
+                        .videoCodec(encoder)
+                        .outputOptions(outputOpts);
+                } else {
+                    // Software (CPU) encoding
+                    outputOpts = [
+                        '-crf', quality === 'high' ? '20' : quality === 'medium' ? '30' : '40',
+                        '-b:v', '0'
+                    ];
+                    
+                    if (hasAudio) {
+                        outputOpts.push('-c:a', 'libopus', '-b:a', '128k');
+                        outputOpts.push('-map', '0:v', '-map', '1:a');
+                        outputOpts.push('-shortest');
+                    }
+                    
+                    command = command
+                        .videoCodec('libvpx-vp9')
+                        .outputOptions(outputOpts);
                 }
-                
-                command = command
-                    .videoCodec('libvpx-vp9')
-                    .outputOptions(outputOpts);
             } else if (outputFormat === 'gif') {
                 command = command
                     .fps(15)
                     .outputOptions(['-loop', '0']);
-                // GIF doesn't support audio
+                // GIF doesn't support audio or GPU encoding
             }
             
             command

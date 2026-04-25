@@ -1382,6 +1382,8 @@ async function toggleTheme() {
     state.theme = state.theme === 'dark' ? 'light' : 'dark';
     await window.electronAPI.setTheme(state.theme);
     applyTheme(state.theme);
+    applyFabricTheme();
+    if (fabricCanvas) fabricCanvas.renderAll();
     showNotification(`Switched to ${state.theme} theme`, 'info');
 }
 
@@ -1861,6 +1863,48 @@ let fabricCanvas = null;
 let annotationStates = [];
 let currentStateIndex = -1;
 
+function applyFabricTheme() {
+    const isDark = state.theme === 'dark';
+    const accent = '#4a90d9';
+    const cornerBg = isDark ? '#2a2a3e' : '#ffffff';
+    const cornerBorder = isDark ? '#4a90d9' : '#357abd';
+    const selectionBg = isDark ? 'rgba(74, 144, 217, 0.15)' : 'rgba(74, 144, 217, 0.1)';
+    const textColor = isDark ? '#ffffff' : '#1a1a2e';
+    
+    // Object defaults (shapes, text, etc.)
+    fabric.Object.prototype.set({
+        borderColor: accent,
+        cornerColor: cornerBg,
+        cornerStrokeColor: cornerBorder,
+        cornerStyle: 'circle',
+        cornerSize: 10,
+        transparentCorners: false,
+        borderScaleFactor: 2,
+        selectionBackgroundColor: selectionBg,
+        padding: 4
+    });
+    
+    // Active selection (multi-select)
+    fabric.ActiveSelection.prototype.set({
+        borderColor: accent,
+        cornerColor: cornerBg,
+        cornerStrokeColor: cornerBorder
+    });
+    
+    // Text defaults
+    fabric.Textbox.prototype.set({
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif",
+        fill: textColor
+    });
+    
+    // Canvas defaults
+    fabric.Canvas.prototype.set({
+        selectionColor: selectionBg,
+        selectionBorderColor: accent,
+        selectionLineWidth: 2
+    });
+}
+
 function initAnnotations() {
     const canvas = elements.annotationCanvas;
     const toolbar = elements.annotationToolbar;
@@ -1871,12 +1915,27 @@ function initAnnotations() {
         return;
     }
     
+    // Apply Fabric.js theme defaults
+    applyFabricTheme();
+    
     // Initialize Fabric canvas
     fabricCanvas = new fabric.Canvas('annotationCanvas', {
         isDrawingMode: false,
         selection: true,
-        defaultCursor: 'default'
+        defaultCursor: 'default',
+        backgroundColor: 'transparent'
     });
+    
+    // Style the Fabric canvas container
+    const container = fabricCanvas.wrapperEl;
+    if (container) {
+        container.style.position = 'absolute';
+        container.style.top = '0';
+        container.style.left = '0';
+        container.style.width = '100%';
+        container.style.height = '100%';
+        container.style.zIndex = '100';
+    }
     
     // Show toolbar for everyone
     checkAnnotationAccess();

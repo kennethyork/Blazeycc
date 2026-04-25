@@ -21,8 +21,8 @@
             <div class="header-actions">
                 <button id="themeToggleBtn" class="btn btn-icon" title="Toggle Theme">🌙</button>
                 <button id="historyBtn" class="btn btn-icon" title="Recording History">📁 History</button>
-                <button id="cloudLibraryBtn" class="btn btn-icon pro-btn-locked" title="Cloud Library (Pro+ $7/mo)" style="display: none;">☁️ Cloud</button>
-                <button id="settingsBtn" class="btn btn-icon" title="Save Location">📁</button>
+                <button id="aiAssistBtn" class="btn btn-icon" title="AI Title & Description">✨ AI Assist</button>
+                <button id="settingsBtn" class="btn btn-icon" title="Save Location">⚙️</button>
             </div>
         </header>
 
@@ -202,6 +202,12 @@
                 <button id="backBtn" class="btn btn-small">← Back</button>
                 <button id="forwardBtn" class="btn btn-small">Forward →</button>
                 <button id="reloadBtn" class="btn btn-small">🔄 Reload</button>
+                <div class="zoom-controls">
+                    <button id="zoomOutBtn" class="btn btn-small" title="Zoom Out">−</button>
+                    <span id="zoomLevelDisplay" class="zoom-level">100%</span>
+                    <button id="zoomInBtn" class="btn btn-small" title="Zoom In">+</button>
+                    <button id="zoomResetBtn" class="btn btn-small" title="Reset Zoom">⟲</button>
+                </div>
                 <span id="currentUrl" class="current-url"></span>
             </div>
             <!-- Annotation Toolbar (Pro+) -->
@@ -239,8 +245,35 @@
             </div>
         </section>
 
-        <!-- Cloud Library Panel (hidden by default, Pro+ feature) -->
-        <section class="cloud-library-panel" id="cloudLibraryPanel" style="display: none;"></section>
+        <!-- AI Assist Panel (hidden by default) -->
+        <section class="ai-assist-panel" id="aiAssistPanel" style="display: none;">
+            <div class="panel-header">
+                <h3>✨ AI Assist</h3>
+                <button id="closeAiAssistBtn" class="btn btn-small">✕ Close</button>
+            </div>
+            <div class="ai-assist-content">
+                <p class="help-text">Generate titles, descriptions, and hashtags for your recording using a local AI (Ollama).</p>
+                <button id="generateAiBtn" class="btn btn-primary" style="width:100%;margin-bottom:1rem;">✨ Generate Metadata</button>
+                <div id="aiResults" style="display:none;">
+                    <div class="ai-result-item">
+                        <label>Title</label>
+                        <input type="text" id="aiTitle" readonly>
+                        <button class="btn btn-small btn-copy" data-target="aiTitle">📋 Copy</button>
+                    </div>
+                    <div class="ai-result-item">
+                        <label>Description</label>
+                        <textarea id="aiDescription" rows="3" readonly></textarea>
+                        <button class="btn btn-small btn-copy" data-target="aiDescription">📋 Copy</button>
+                    </div>
+                    <div class="ai-result-item">
+                        <label>Hashtags</label>
+                        <input type="text" id="aiHashtags" readonly>
+                        <button class="btn btn-small btn-copy" data-target="aiHashtags">📋 Copy</button>
+                    </div>
+                </div>
+                <div id="aiStatus" class="help-text" style="text-align:center;margin-top:1rem;"></div>
+            </div>
+        </section>
 
         <!-- Settings Panel (hidden by default) -->
         <section class="settings-panel" id="settingsPanel" style="display: none;">
@@ -316,9 +349,6 @@
                 </div>
             </div>
         </section>
-
-        <!-- Cloud Preview Modal -->
-        <section class="cloud-preview-modal" id="cloudPreviewModal" style="display: none;">
 
         <!-- Export Progress Modal -->
         <section class="progress-modal" id="progressModal" style="display: none;">

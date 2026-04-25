@@ -753,17 +753,7 @@ ipcMain.handle('set-fast-encode', async (event, enabled) => {
     return enabled;
 });
 
-// Pro settings: Cloud sync configuration
-ipcMain.handle('get-cloud-config', async () => {
-    return store.get('cloudConfig', { googleDrive: null, dropbox: null });
-});
-
-ipcMain.handle('set-cloud-config', async (event, config) => {
-    store.set('cloudConfig', config);
-    return config;
-});
-
-// Open external URL (for OAuth)
+// Open external URL
 ipcMain.handle('open-external', async (event, url) => {
     shell.openExternal(url);
     return true;

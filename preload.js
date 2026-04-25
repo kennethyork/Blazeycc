@@ -63,34 +63,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFastEncode: () => ipcRenderer.invoke('get-fast-encode'),
     setFastEncode: (enabled) => ipcRenderer.invoke('set-fast-encode', enabled),
     
-    // Cloud sync (Pro)
-    getCloudConfig: () => ipcRenderer.invoke('get-cloud-config'),
-    setCloudConfig: (config) => ipcRenderer.invoke('set-cloud-config', config),
     openExternal: (url) => ipcRenderer.invoke('open-external', url),
     
-    // Cloud Storage (Pro+) - R2-based storage
-    cloudStorageUpload: (filePath) => ipcRenderer.invoke('cloud-storage-upload', filePath),
-    cloudStorageList: () => ipcRenderer.invoke('cloud-storage-list'),
-    cloudStorageDownload: (key, filename) => ipcRenderer.invoke('cloud-storage-download', key, filename),
-    cloudStorageDelete: (key) => ipcRenderer.invoke('cloud-storage-delete', key),
-    cloudStorageUsage: () => ipcRenderer.invoke('cloud-storage-usage'),
-    // Shareable links
-    cloudStorageShare: (key, expiresIn) => ipcRenderer.invoke('cloud-storage-share', { key, expiresIn }),
-    cloudStorageUnshare: (key) => ipcRenderer.invoke('cloud-storage-unshare', key),
-    // Preview URL
-    cloudStoragePreviewUrl: (key) => ipcRenderer.invoke('cloud-storage-preview-url', key),
     // Copy to clipboard
     copyToClipboard: (text) => ipcRenderer.invoke('copy-to-clipboard', text),
     
-    // Pro+ Features
-    cloudUploadThumbnail: (videoKey, thumbnailPath) => ipcRenderer.invoke('cloud-upload-thumbnail', { videoKey, thumbnailPath }),
-    cloudSetDownloadEnabled: (videoKey, enabled) => ipcRenderer.invoke('cloud-set-download-enabled', { videoKey, enabled }),
-    
-    // Pro Max Features
-    cloudGetEmbedCode: (videoKey) => ipcRenderer.invoke('cloud-get-embed-code', videoKey),
-    cloudGetVideoAnalytics: (videoKey) => ipcRenderer.invoke('cloud-get-video-analytics', videoKey),
-    
-    // YouTube/Vimeo Export (Pro+)
+    // YouTube/Vimeo Export
     exportToYouTube: (filePath) => ipcRenderer.invoke('export-to-youtube', filePath),
     exportToVimeo: (filePath) => ipcRenderer.invoke('export-to-vimeo', filePath),
     

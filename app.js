@@ -17,6 +17,10 @@ const elements = {
     forwardBtn: document.getElementById('forwardBtn'),
     reloadBtn: document.getElementById('reloadBtn'),
     currentUrl: document.getElementById('currentUrl'),
+    zoomInBtn: document.getElementById('zoomInBtn'),
+    zoomOutBtn: document.getElementById('zoomOutBtn'),
+    zoomResetBtn: document.getElementById('zoomResetBtn'),
+    zoomLevelDisplay: document.getElementById('zoomLevelDisplay'),
     captureCanvas: document.getElementById('captureCanvas'),
     notifications: document.getElementById('notifications'),
     // Settings elements
@@ -37,17 +41,16 @@ const elements = {
     historyList: document.getElementById('historyList'),
     clearHistoryBtn: document.getElementById('clearHistoryBtn'),
     closeHistoryBtn: document.getElementById('closeHistoryBtn'),
-    // Cloud library panel (Pro)
-    cloudLibraryBtn: document.getElementById('cloudLibraryBtn'),
-    cloudLibraryPanel: document.getElementById('cloudLibraryPanel'),
-    cloudFilesList: document.getElementById('cloudFilesList'),
-    storageUsageDisplay: document.getElementById('storageUsageDisplay'),
-    storageBar: document.getElementById('storageBar'),
-    refreshCloudBtn: document.getElementById('refreshCloudBtn'),
-    closeCloudLibraryBtn: document.getElementById('closeCloudLibraryBtn'),
-    settingsStorageMeter: document.getElementById('settingsStorageMeter'),
-    settingsStorageText: document.getElementById('settingsStorageText'),
-    openCloudLibraryFromSettings: document.getElementById('openCloudLibraryFromSettings'),
+    // AI Assist panel
+    aiAssistBtn: document.getElementById('aiAssistBtn'),
+    aiAssistPanel: document.getElementById('aiAssistPanel'),
+    closeAiAssistBtn: document.getElementById('closeAiAssistBtn'),
+    generateAiBtn: document.getElementById('generateAiBtn'),
+    aiResults: document.getElementById('aiResults'),
+    aiTitle: document.getElementById('aiTitle'),
+    aiDescription: document.getElementById('aiDescription'),
+    aiHashtags: document.getElementById('aiHashtags'),
+    aiStatus: document.getElementById('aiStatus'),
     // Settings panel
     settingsBtn: document.getElementById('settingsBtn'),
     settingsPanel: document.getElementById('settingsPanel'),
@@ -153,11 +156,13 @@ const state = {
     audioChunks: [],
     // Pro features
     customWatermarkSettings: { type: 'none', text: '', position: 'bottom-left', imagePath: null },
-    // Annotation state (Pro+)
+    // Annotation state
     annotationEnabled: false,
     annotationTool: 'arrow',
     annotationHistory: [],
-    annotationRedoStack: []
+    annotationRedoStack: [],
+    // Zoom state
+    zoomLevel: 0
 };
 
 // Initialize
@@ -248,6 +253,11 @@ async function init() {
     elements.forwardBtn.addEventListener('click', () => elements.webview.goForward());
     elements.reloadBtn.addEventListener('click', () => elements.webview.reload());
     
+    // Zoom controls
+    elements.zoomInBtn?.addEventListener('click', zoomIn);
+    elements.zoomOutBtn?.addEventListener('click', zoomOut);
+    elements.zoomResetBtn?.addEventListener('click', resetZoom);
+    
     // Webview events
     elements.webview.addEventListener('did-start-loading', () => {
         elements.statusText.textContent = 'Loading...';
@@ -257,6 +267,9 @@ async function init() {
         elements.statusText.textContent = 'Ready';
         elements.currentUrl.textContent = elements.webview.getURL();
         elements.addBookmarkBtn.disabled = false;
+        // Reset zoom tracking on new page load
+        state.zoomLevel = 0;
+        updateZoomDisplay();
     });
     
     elements.webview.addEventListener('did-fail-load', (e) => {
@@ -268,10 +281,14 @@ async function init() {
     elements.webview.addEventListener('did-navigate', () => {
         elements.currentUrl.textContent = elements.webview.getURL();
         state.currentUrl = elements.webview.getURL();
+        // Re-apply zoom on navigation
+        elements.webview.setZoomLevel(state.zoomLevel);
     });
 
     elements.webview.addEventListener('did-navigate-in-page', () => {
         elements.currentUrl.textContent = elements.webview.getURL();
+        // Re-apply zoom on in-page navigation
+        elements.webview.setZoomLevel(state.zoomLevel);
     });
 
     // Settings event listeners
@@ -292,19 +309,22 @@ async function init() {
     elements.closeHistoryBtn.addEventListener('click', () => elements.historyPanel.style.display = 'none');
     elements.clearHistoryBtn.addEventListener('click', clearHistory);
     
-    // Cloud library panel (Pro+)
-    elements.cloudLibraryBtn.addEventListener('click', toggleCloudLibraryPanel);
-    elements.closeCloudLibraryBtn?.addEventListener('click', () => elements.cloudLibraryPanel.style.display = 'none');
-    elements.refreshCloudBtn?.addEventListener('click', loadCloudLibrary);
-    elements.openCloudLibraryFromSettings?.addEventListener('click', () => {
-        elements.settingsPanel.style.display = 'none';
-        toggleCloudLibraryPanel();
-    });
+    // AI Assist panel
+    elements.aiAssistBtn?.addEventListener('click', toggleAiAssistPanel);
+    elements.closeAiAssistBtn?.addEventListener('click', () => elements.aiAssistPanel.style.display = 'none');
+    elements.generateAiBtn?.addEventListener('click', generateAiMetadata);
     
-    // Cloud preview modal
-    document.getElementById('closeCloudPreviewBtn')?.addEventListener('click', closeCloudPreview);
-    document.getElementById('cloudPreviewModal')?.addEventListener('click', (e) => {
-        if (e.target.id === 'cloudPreviewModal') closeCloudPreview();
+    // Copy buttons for AI results
+    document.querySelectorAll('.btn-copy[data-target]')?.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetId = btn.dataset.target;
+            const el = document.getElementById(targetId);
+            if (el) {
+                navigator.clipboard.writeText(el.value).then(() => {
+                    showNotification('Copied to clipboard!', 'success');
+                });
+            }
+        });
     });
     
     // Settings panel
@@ -329,6 +349,22 @@ async function init() {
     // Re-calculate viewport on window resize
     window.addEventListener('resize', () => {
         resizeBrowserViewport(elements.formatPreset.value);
+    });
+    
+    // Keyboard shortcuts for zoom (Ctrl/Cmd + +/- and Ctrl/Cmd + 0)
+    window.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === '=' || e.key === '+') {
+                e.preventDefault();
+                zoomIn();
+            } else if (e.key === '-') {
+                e.preventDefault();
+                zoomOut();
+            } else if (e.key === '0') {
+                e.preventDefault();
+                resetZoom();
+            }
+        }
     });
 
     showNotification('Ready! Enter a URL to get started.', 'info');
@@ -453,6 +489,10 @@ function loadWebsite() {
     // Load the URL
     elements.webview.src = result.url;
     state.websiteLoaded = true;
+    
+    // Reset zoom for new page
+    state.zoomLevel = 0;
+    updateZoomDisplay();
     
     // Enable recording buttons
     elements.recordBtn.disabled = false;
@@ -924,7 +964,7 @@ function toggleHistoryPanel() {
     const isVisible = elements.historyPanel.style.display !== 'none';
     elements.historyPanel.style.display = isVisible ? 'none' : 'block';
     elements.settingsPanel.style.display = 'none';
-    elements.cloudLibraryPanel.style.display = 'none';
+    elements.aiAssistPanel.style.display = 'none';
 }
 
 async function clearHistory() {
@@ -934,289 +974,127 @@ async function clearHistory() {
 }
 
 // =====================
-// Cloud Library functions (Pro+)
+// AI Assist Functions
 // =====================
 
-async function toggleCloudLibraryPanel() {
-    showNotification('Cloud sync coming in a future update', 'info');
+async function toggleAiAssistPanel() {
+    const isVisible = elements.aiAssistPanel.style.display !== 'none';
+    elements.aiAssistPanel.style.display = isVisible ? 'none' : 'block';
+    elements.historyPanel.style.display = 'none';
+    elements.settingsPanel.style.display = 'none';
 }
 
-async function loadCloudLibrary() {
-    elements.cloudFilesList.innerHTML = '<p class="empty-message">Loading...</p>';
-    
-    const result = await window.electronAPI.cloudStorageList();
-    
-    if (!result.success) {
-        elements.cloudFilesList.innerHTML = `<p class="empty-message">${result.error || 'Failed to load'}</p>`;
+async function generateAiMetadata() {
+    if (!state.websiteLoaded) {
+        showNotification('Please load a website first', 'error');
         return;
     }
-    
-    // Update storage usage display
-    updateStorageDisplay(result.usage);
-    
-    if (!result.files || result.files.length === 0) {
-        elements.cloudFilesList.innerHTML = '<p class="empty-message">No files in cloud storage</p>';
-        return;
-    }
-    
-    elements.cloudFilesList.innerHTML = '';
-    
-    result.files.forEach(file => {
-        const item = document.createElement('div');
-        item.className = 'cloud-file-item';
-        
-        const sizeStr = formatFileSize(file.size);
-        const dateStr = new Date(file.uploadedAt).toLocaleDateString();
-        const isShared = !!file.shareToken;
-        
-        item.innerHTML = `
-            <div class="cloud-file-info">
-                <span class="cloud-file-name">${escapeHtml(file.filename)}</span>
-                <span class="cloud-file-meta">${sizeStr} • ${dateStr}${isShared ? ' • 🔗 Shared' : ''}</span>
-            </div>
-            <div class="cloud-file-actions">
-                <button class="btn btn-small btn-preview-cloud" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}" data-type="${escapeHtml(file.contentType || 'video/mp4')}" title="Preview">▶️</button>
-                <button class="btn btn-small btn-share-cloud ${isShared ? 'shared' : ''}" data-key="${escapeHtml(file.key)}" data-share-url="${isShared ? escapeHtml(file.shareUrl) : ''}" title="${isShared ? 'Copy Link / Unshare' : 'Share'}">🔗</button>
-                <div class="export-dropdown">
-                    <button class="btn btn-small btn-export-cloud" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}" title="Export to YouTube/Vimeo">📤</button>
-                    <div class="export-dropdown-menu" style="display: none;">
-                        <button class="export-option" data-platform="youtube" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}">
-                            <span class="export-icon">🎬</span> YouTube
-                        </button>
-                        <button class="export-option" data-platform="vimeo" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}">
-                            <span class="export-icon">🎥</span> Vimeo
-                        </button>
-                    </div>
-                </div>
-                <button class="btn btn-small btn-download-cloud" data-key="${escapeHtml(file.key)}" data-filename="${escapeHtml(file.filename)}" title="Download">⬇️</button>
-                <button class="btn btn-small btn-danger btn-delete-cloud" data-key="${escapeHtml(file.key)}" title="Delete">🗑️</button>
-            </div>
-        `;
-        
-        // Preview handler
-        item.querySelector('.btn-preview-cloud').addEventListener('click', async (e) => {
-            const key = e.target.dataset.key;
-            const filename = e.target.dataset.filename;
-            const contentType = e.target.dataset.type;
-            await showCloudPreview(key, filename, contentType);
-        });
-        
-        // Export dropdown toggle
-        const exportBtn = item.querySelector('.btn-export-cloud');
-        const exportMenu = item.querySelector('.export-dropdown-menu');
-        exportBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            // Close other dropdowns
-            document.querySelectorAll('.export-dropdown-menu').forEach(m => {
-                if (m !== exportMenu) m.style.display = 'none';
-            });
-            exportMenu.style.display = exportMenu.style.display === 'none' ? 'flex' : 'none';
-        });
-        
-        // Export option handlers
-        item.querySelectorAll('.export-option').forEach(opt => {
-            opt.addEventListener('click', async (e) => {
-                const platform = e.currentTarget.dataset.platform;
-                const key = e.currentTarget.dataset.key;
-                const filename = e.currentTarget.dataset.filename;
-                exportMenu.style.display = 'none';
-                await exportToSocialPlatform(platform, key, filename);
-            });
-        });
-        
-        // Share handler
-        item.querySelector('.btn-share-cloud').addEventListener('click', async (e) => {
-            const key = e.target.dataset.key;
-            const existingShareUrl = e.target.dataset.shareUrl;
-            
-            if (existingShareUrl) {
-                // Already shared - show options
-                const action = await showShareOptions(existingShareUrl);
-                if (action === 'copy') {
-                    await window.electronAPI.copyToClipboard(existingShareUrl);
-                    showNotification('Link copied to clipboard!', 'success');
-                } else if (action === 'unshare') {
-                    const unshareResult = await window.electronAPI.cloudStorageUnshare(key);
-                    if (unshareResult.success) {
-                        showNotification('Share link revoked', 'success');
-                        await loadCloudLibrary();
-                    } else {
-                        showNotification(unshareResult.error || 'Failed to unshare', 'error');
-                    }
-                }
-            } else {
-                // Create share link
-                showNotification('Creating share link...', 'info');
-                const shareResult = await window.electronAPI.cloudStorageShare(key, 7);
-                if (shareResult.success) {
-                    await window.electronAPI.copyToClipboard(shareResult.shareUrl);
-                    showNotification('Share link copied to clipboard!', 'success');
-                    await loadCloudLibrary();
-                } else {
-                    showNotification(shareResult.error || 'Failed to create share link', 'error');
-                }
-            }
-        });
-        
-        // Download handler
-        item.querySelector('.btn-download-cloud').addEventListener('click', async (e) => {
-            const key = e.target.dataset.key;
-            const filename = e.target.dataset.filename;
-            showNotification('Downloading...', 'info');
-            const downloadResult = await window.electronAPI.cloudStorageDownload(key, filename);
-            if (downloadResult.success) {
-                showNotification(`Downloaded: ${filename}`, 'success');
-            } else {
-                showNotification(downloadResult.error || 'Download failed', 'error');
-            }
-        });
-        
-        // Delete handler
-        item.querySelector('.btn-delete-cloud').addEventListener('click', async (e) => {
-            const key = e.target.dataset.key;
-            if (confirm('Delete this file from cloud storage?')) {
-                const deleteResult = await window.electronAPI.cloudStorageDelete(key);
-                if (deleteResult.success) {
-                    showNotification('File deleted', 'success');
-                    await loadCloudLibrary();
-                } else {
-                    showNotification(deleteResult.error || 'Delete failed', 'error');
-                }
-            }
-        });
-        
-        elements.cloudFilesList.appendChild(item);
-    });
-}
 
-// Cloud preview modal
-async function showCloudPreview(key, filename, contentType) {
-    const urlResult = await window.electronAPI.cloudStoragePreviewUrl(key);
-    if (!urlResult.success) {
-        showNotification(urlResult.error || 'Failed to get preview', 'error');
-        return;
-    }
-    
-    const modal = document.getElementById('cloudPreviewModal');
-    const video = document.getElementById('cloudPreviewVideo');
-    const title = document.getElementById('cloudPreviewTitle');
-    
-    title.textContent = filename;
-    video.src = urlResult.url;
-    video.type = contentType;
-    modal.style.display = 'flex';
-    video.play();
-}
+    elements.aiStatus.textContent = 'Analyzing page content...';
+    elements.aiResults.style.display = 'none';
 
-function closeCloudPreview() {
-    const modal = document.getElementById('cloudPreviewModal');
-    const video = document.getElementById('cloudPreviewVideo');
-    video.pause();
-    video.src = '';
-    modal.style.display = 'none';
-}
+    try {
+        // Extract page content from the webview
+        const pageData = await elements.webview.executeJavaScript(`
+            (function() {
+                const title = document.title || '';
+                const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
+                const ogTitle = document.querySelector('meta[property="og:title"]')?.content || '';
+                const ogDesc = document.querySelector('meta[property="og:description"]')?.content || '';
+                const h1 = document.querySelector('h1')?.innerText?.substring(0, 500) || '';
+                const visibleText = Array.from(document.querySelectorAll('p, h2, h3, h4, li'))
+                    .map(el => el.innerText)
+                    .join(' ')
+                    .substring(0, 3000);
+                return { title, metaDesc, ogTitle, ogDesc, h1, visibleText, url: window.location.href };
+            })()
+        `, true);
 
-// Share options dialog
-function showShareOptions(shareUrl) {
-    return new Promise((resolve) => {
-        const action = confirm(`Share link:\n${shareUrl}\n\nClick OK to copy link, or Cancel then use the menu to unshare.`);
-        if (action) {
-            resolve('copy');
-        } else {
-            const unshare = confirm('Do you want to revoke this share link?');
-            resolve(unshare ? 'unshare' : null);
+        const prompt = buildAiPrompt(pageData);
+        elements.aiStatus.textContent = 'Generating with Ollama...';
+
+        const response = await fetch('http://localhost:11434/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'llama3.2',
+                prompt: prompt,
+                stream: false,
+                options: {
+                    temperature: 0.7,
+                    num_predict: 300
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Ollama not running. Install Ollama and run: ollama run llama3.2');
         }
-    });
-}
 
-// Export to YouTube/Vimeo
-async function exportToSocialPlatform(platform, key, filename) {
-    showNotification(`Preparing export to ${platform}...`, 'info');
-    
-    // First download the file locally
-    const downloadResult = await window.electronAPI.cloudStorageDownload(key, filename);
-    
-    if (!downloadResult.success) {
-        showNotification(downloadResult.error || 'Failed to download file', 'error');
-        return;
-    }
-    
-    showNotification(`File downloaded! Opening ${platform}...`, 'success');
-    
-    // Open the respective upload page
-    const uploadUrls = {
-        youtube: 'https://studio.youtube.com/channel/upload',
-        vimeo: 'https://vimeo.com/upload'
-    };
-    
-    const url = uploadUrls[platform];
-    if (url) {
-        await window.electronAPI.openExternal(url);
-        showNotification(`Upload your video at ${platform}. File saved to: ${downloadResult.path}`, 'info');
+        const data = await response.json();
+        const result = parseAiResponse(data.response);
+
+        elements.aiTitle.value = result.title || '';
+        elements.aiDescription.value = result.description || '';
+        elements.aiHashtags.value = result.hashtags || '';
+        elements.aiResults.style.display = 'block';
+        elements.aiStatus.textContent = 'Done! Copy the results above.';
+        showNotification('AI metadata generated!', 'success');
+    } catch (error) {
+        console.error('AI generation error:', error);
+        elements.aiStatus.textContent = '';
+        showNotification('AI failed: ' + error.message, 'error');
     }
 }
 
-// Close export dropdowns when clicking outside
-document.addEventListener('click', () => {
-    document.querySelectorAll('.export-dropdown-menu').forEach(menu => {
-        menu.style.display = 'none';
-    });
-});
+function buildAiPrompt(pageData) {
+    return `You are a social media expert. Based on this website, create:
+1. A catchy YouTube title (max 60 chars)
+2. A 2-sentence description for YouTube/LinkedIn
+3. 5 relevant hashtags for Twitter/X, Instagram, and TikTok
 
-function updateStorageDisplay(usage) {
-    if (!usage) return;
-    
-    const usedGB = (usage.used / (1024 * 1024 * 1024)).toFixed(2);
-    const limitGB = (usage.limit / (1024 * 1024 * 1024)).toFixed(0);
-    const percent = usage.percentUsed || 0;
-    
-    // Update header display
-    if (elements.storageUsageDisplay) {
-        elements.storageUsageDisplay.textContent = `${usedGB} / ${limitGB} GB`;
-    }
-    
-    // Update storage bar
-    if (elements.storageBar) {
-        elements.storageBar.style.width = `${percent}%`;
-        elements.storageBar.classList.toggle('warning', percent > 80);
-    }
-    
-    // Update settings display
-    if (elements.settingsStorageMeter) {
-        elements.settingsStorageMeter.style.width = `${percent}%`;
-    }
-    if (elements.settingsStorageText) {
-        elements.settingsStorageText.textContent = `${usedGB} GB of ${limitGB} GB used (${percent}%)`;
-    }
+Website URL: ${pageData.url}
+Title: ${pageData.title}
+Meta Description: ${pageData.metaDesc}
+OG Title: ${pageData.ogTitle}
+OG Description: ${pageData.ogDesc}
+H1: ${pageData.h1}
+Page Content: ${pageData.visibleText.substring(0, 2000)}
+
+Respond in this exact format:
+TITLE: <title here>
+DESCRIPTION: <description here>
+HASHTAGS: <hashtag1> <hashtag2> <hashtag3> <hashtag4> <hashtag5>`;
 }
 
-async function uploadToCloud(filePath) {
-    const isProPlus = await window.electronAPI.isProPlusLicensed();
-    if (!isProPlus) {
-        return { success: false, error: 'Pro+ license required ($7/mo)' };
-    }
-    
-    const result = await window.electronAPI.cloudStorageUpload(filePath);
-    if (result.success) {
-        // Refresh cloud library if open
-        if (elements.cloudLibraryPanel.style.display !== 'none') {
-            await loadCloudLibrary();
+function parseAiResponse(response) {
+    const lines = response.split('\n');
+    let title = '';
+    let description = '';
+    let hashtags = '';
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('TITLE:')) {
+            title = trimmed.substring(6).trim();
+        } else if (trimmed.startsWith('DESCRIPTION:')) {
+            description = trimmed.substring(12).trim();
+        } else if (trimmed.startsWith('HASHTAGS:')) {
+            hashtags = trimmed.substring(9).trim();
         }
     }
-    return result;
-}
 
-function formatFileSize(bytes) {
-    if (!bytes) return '0 B';
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
-}
+    // Fallback: if parsing failed, use simple heuristics
+    if (!title && response.length > 0) {
+        const firstLine = response.split('\n')[0];
+        title = firstLine.substring(0, 60);
+    }
+    if (!description && response.length > 0) {
+        const sentences = response.split(/[.!?]+/).filter(s => s.trim().length > 20);
+        description = sentences.slice(0, 2).join('. ') + '.';
+    }
 
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return { title, description, hashtags };
 }
 
 // Settings functions
@@ -1224,7 +1102,7 @@ async function toggleSettingsPanel() {
     const isVisible = elements.settingsPanel.style.display !== 'none';
     elements.settingsPanel.style.display = isVisible ? 'none' : 'block';
     elements.historyPanel.style.display = 'none';
-    elements.cloudLibraryPanel.style.display = 'none';
+    elements.aiAssistPanel.style.display = 'none';
 }
 
 async function loadSavePath() {
@@ -1357,6 +1235,40 @@ function showNotificationWithAction(message, type, actionBtn) {
     setTimeout(() => {
         notification.remove();
     }, 10000);
+}
+
+// Zoom functions
+function updateZoomDisplay() {
+    // Convert zoom level to percentage: zoomLevel 0 = 100%, each 1 = 2x
+    const percent = Math.round(Math.pow(2, state.zoomLevel) * 100);
+    if (elements.zoomLevelDisplay) {
+        elements.zoomLevelDisplay.textContent = percent + '%';
+    }
+}
+
+function setZoomLevel(level) {
+    if (!elements.webview || elements.webview.style.display === 'none') return;
+    
+    // Clamp zoom level between -3 (12.5%) and 3 (800%)
+    state.zoomLevel = Math.max(-3, Math.min(3, level));
+    
+    elements.webview.setZoomLevel(state.zoomLevel);
+    updateZoomDisplay();
+}
+
+function zoomIn() {
+    setZoomLevel(state.zoomLevel + 0.25);
+    showNotification('Zoom: ' + elements.zoomLevelDisplay.textContent, 'info');
+}
+
+function zoomOut() {
+    setZoomLevel(state.zoomLevel - 0.25);
+    showNotification('Zoom: ' + elements.zoomLevelDisplay.textContent, 'info');
+}
+
+function resetZoom() {
+    setZoomLevel(0);
+    showNotification('Zoom reset to 100%', 'info');
 }
 
 // Theme functions
@@ -1841,65 +1753,14 @@ function initFastEncoding() {
     })();
 }
 
-// ========================================
-// CLOUD SYNC (Pro Feature) 
-// ========================================
-function initCloudSync() {
-    const enableCloudSyncCheckbox = document.getElementById('enableCloudSync');
-    const cloudSyncSection = document.getElementById('cloudSyncSection');
-    const connectGoogleDriveBtn = document.getElementById('connectGoogleDrive');
-    const connectDropboxBtn = document.getElementById('connectDropbox');
-    
-    enableCloudSyncCheckbox?.addEventListener('change', async (e) => {
-        if (cloudSyncSection) {
-            cloudSyncSection.style.display = e.target.checked ? 'block' : 'none';
-        }
-        if (e.target.checked) {
-            loadCloudStatus();
-        }
-    });
-    
-    connectGoogleDriveBtn?.addEventListener('click', () => {
-        // In a real implementation, this would open OAuth flow
-        showNotification('Google Drive integration coming soon! For now, set save path to your Google Drive sync folder.', 'info');
-    });
-    
-    connectDropboxBtn?.addEventListener('click', () => {
-        // In a real implementation, this would open OAuth flow
-        showNotification('Dropbox integration coming soon! For now, set save path to your Dropbox sync folder.', 'info');
-    });
-}
 
-async function loadCloudStatus() {
-    try {
-        const config = await window.electronAPI.getCloudConfig();
-        const cloudStatus = document.getElementById('cloudStatus');
-        
-        if (config.googleDrive || config.dropbox) {
-            cloudStatus.innerHTML = `
-                <div class="cloud-connected">
-                    ${config.googleDrive ? '✅ Google Drive connected' : ''}
-                    ${config.dropbox ? '✅ Dropbox connected' : ''}
-                </div>
-            `;
-        } else {
-            // Suggest using sync folder
-            const savePath = await window.electronAPI.getSavePath();
-            cloudStatus.innerHTML = `
-                <p class="help-text">💡 Tip: Set your save location to a cloud-synced folder (e.g., ~/Google Drive/Recordings or ~/Dropbox/Recordings)</p>
-                <p class="help-text">Current: ${savePath}</p>
-            `;
-        }
-    } catch (e) {}
-}
 
-// Initialize Pro features
+// Initialize features
 document.addEventListener('DOMContentLoaded', () => {
     initBatchRecording();
     initScheduledRecording();
     initCustomWatermark();
     initFastEncoding();
-    initCloudSync();
     initAnnotations();
 });
 
@@ -1960,15 +1821,10 @@ function initAnnotations() {
 }
 
 async function checkAnnotationAccess() {
-    try {
-        const tier = await window.electronAPI.getLicenseTier();
-        // Show annotation toolbar for Pro+ or higher
-        if (tier === 'pro+' || tier === 'pro_plus' || tier === 'pro_max' || tier === 'pro-max') {
-            if (elements.annotationToolbar) {
-                elements.annotationToolbar.style.display = 'flex';
-            }
-        }
-    } catch (e) {}
+    // All features are free - show annotation toolbar for everyone
+    if (elements.annotationToolbar) {
+        elements.annotationToolbar.style.display = 'flex';
+    }
 }
 
 function resizeAnnotationCanvas() {

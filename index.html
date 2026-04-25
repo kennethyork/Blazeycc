@@ -245,16 +245,24 @@
         <!-- Settings Panel (hidden by default) -->
         <section class="settings-panel" id="settingsPanel" style="display: none;">
             <div class="panel-header">
-                <h3>📁 Save Location</h3>
+                <h3>⚙️ Settings</h3>
                 <button id="closeSettingsBtn" class="btn btn-small">✕ Close</button>
             </div>
             <div class="settings-content">
                 <div class="setting-item">
+                    <label>Save Location</label>
                     <div class="save-path-row">
                         <input type="text" id="savePathInput" readonly>
                         <button id="changeSavePathBtn" class="btn btn-primary">📂 Browse...</button>
                         <input type="file" id="folderPickerFallback" webkitdirectory directory style="display:none" />
                     </div>
+                </div>
+                <div class="setting-item" id="gpuEncodingSetting" style="display: none;">
+                    <label>
+                        <input type="checkbox" id="gpuEncodingToggle">
+                        Use GPU Encoding (faster exports)
+                    </label>
+                    <p class="help-text" id="gpuEncoderInfo">Detecting GPU...</p>
                 </div>
             </div>
         </section>

@@ -54,6 +54,9 @@ const elements = {
     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
     savePathInput: document.getElementById('savePathInput'),
     changeSavePathBtn: document.getElementById('changeSavePathBtn'),
+    gpuEncodingSetting: document.getElementById('gpuEncodingSetting'),
+    gpuEncodingToggle: document.getElementById('gpuEncodingToggle'),
+    gpuEncoderInfo: document.getElementById('gpuEncoderInfo'),
     // New elements
     themeToggleBtn: document.getElementById('themeToggleBtn'),
     autoScrollToggle: document.getElementById('autoScrollToggle'),
@@ -315,6 +318,7 @@ async function init() {
     await loadBookmarks();
     await loadHistory();
     await loadSavePath();
+    await loadGpuEncoding();
     await loadLicense();
 
     // Apply initial viewport size for the default preset
@@ -485,7 +489,7 @@ async function startRecording() {
         state.timerInterval = setInterval(updateTimer, 1000);
         updateTimer();
         
-        // Start frame capture loop (~15fps to reduce freeze/lag)
+        // Start frame capture loop (5fps = 200ms interval for smooth, lag-free recording)
         state.frameCapturePending = false;
         state.droppedFrames = 0;
         
@@ -527,7 +531,7 @@ async function startRecording() {
                 .finally(() => {
                     state.frameCapturePending = false;
                 });
-        }, 66); // ~15fps for smoother UI
+        }, 200); // 5fps for smooth, lag-free website recordings
         
         // Start audio capture if enabled
         if (state.audioEnabled) {
@@ -1219,6 +1223,28 @@ async function toggleSettingsPanel() {
 async function loadSavePath() {
     const savePath = await window.electronAPI.getSavePath();
     elements.savePathInput.value = savePath;
+}
+
+async function loadGpuEncoding() {
+    try {
+        const gpuInfo = await window.electronAPI.detectGpuEncoder();
+        if (gpuInfo.available) {
+            elements.gpuEncodingSetting.style.display = 'block';
+            elements.gpuEncoderInfo.textContent = `Detected: ${gpuInfo.name}`;
+            const enabled = await window.electronAPI.getGpuEncoding();
+            elements.gpuEncodingToggle.checked = enabled;
+        }
+    } catch (e) {
+        console.log('GPU detection failed:', e);
+    }
+    
+    // Add event listener
+    if (elements.gpuEncodingToggle) {
+        elements.gpuEncodingToggle.addEventListener('change', async (e) => {
+            await window.electronAPI.setGpuEncoding(e.target.checked);
+            showNotification(e.target.checked ? 'GPU encoding enabled' : 'GPU encoding disabled', 'info');
+        });
+    }
 }
 
 // Click handler for browse folder

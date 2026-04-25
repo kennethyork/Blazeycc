@@ -11,6 +11,56 @@ const { autoUpdater } = require('electron-updater');
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
+// GPU encoder detection cache
+let detectedGpuEncoder = null;
+
+// Detect available GPU hardware encoder by running a test encode
+async function detectGpuEncoder() {
+    if (detectedGpuEncoder) return detectedGpuEncoder;
+    
+    const ffmpegPath = getFFmpegPath();
+    if (!ffmpegPath) {
+        detectedGpuEncoder = { available: false, encoder: null, name: null };
+        return detectedGpuEncoder;
+    }
+    
+    // Test encoders in order: NVIDIA NVENC > AMD AMF > Intel QSV
+    const encoders = [
+        { codec: 'h264_nvenc', name: 'NVIDIA NVENC' },
+        { codec: 'h264_amf', name: 'AMD AMF' },
+        { codec: 'h264_qsv', name: 'Intel Quick Sync' }
+    ];
+    
+    for (const enc of encoders) {
+        try {
+            const testResult = await new Promise((resolve) => {
+                const { execFile } = require('child_process');
+                execFile(ffmpegPath, ['-f', 'lavfi', '-i', 'nullsrc=s=320x240:d=0.1', '-c:v', enc.codec, '-f', 'null', '-'], { timeout: 5000 }, (err, stdout, stderr) => {
+                    if (err && stderr && stderr.includes('not found')) {
+                        resolve(false);
+                    } else if (err && stderr && (stderr.includes('No NVENC') || stderr.includes('init failed') || stderr.includes('not supported'))) {
+                        resolve(false);
+                    } else {
+                        resolve(true);
+                    }
+                });
+            });
+            
+            if (testResult) {
+                console.log('GPU encoder detected:', enc.name, '(' + enc.codec + ')');
+                detectedGpuEncoder = { available: true, encoder: enc.codec, name: enc.name };
+                return detectedGpuEncoder;
+            }
+        } catch (e) {
+            // Continue to next encoder
+        }
+    }
+    
+    console.log('No GPU encoder detected, falling back to CPU (libx264)');
+    detectedGpuEncoder = { available: false, encoder: null, name: null };
+    return detectedGpuEncoder;
+}
+
 // License API configuration
 // Get watermark logo path
 function getWatermarkLogoPath() {
@@ -119,7 +169,8 @@ const store = new Store({
         savePath: path.join(os.homedir(), 'Downloads'),
         bookmarks: [],
         history: [],
-        theme: 'dark'
+        theme: 'dark',
+        gpuEncoding: false
     }
 });
 
@@ -515,6 +566,20 @@ ipcMain.handle('set-theme', async (event, theme) => {
     return theme;
 });
 
+// GPU encoding settings
+ipcMain.handle('get-gpu-encoding', async () => {
+    return store.get('gpuEncoding', false);
+});
+
+ipcMain.handle('set-gpu-encoding', async (event, enabled) => {
+    store.set('gpuEncoding', enabled);
+    return enabled;
+});
+
+ipcMain.handle('detect-gpu-encoder', async () => {
+    return detectGpuEncoder();
+});
+
 // License management - all features are free, no external validation
 function validateLicenseKey(email, key) {
     // All features are free - always return true
@@ -838,7 +903,7 @@ ipcMain.handle('start-canvas-recording', async () => {
             tempDir,
             frameCount: 0,
             startTime: Date.now(),
-            fps: 30
+            fps: 5
         };
         
         console.log('Canvas recording started, temp dir:', tempDir);
@@ -987,6 +1052,13 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
         
         console.log('Audio merge check:', { hasAudio, audioPath });
         
+        // Check GPU encoding preference
+        const gpuEncodingEnabled = store.get('gpuEncoding', false);
+        const gpuEncoder = gpuEncodingEnabled ? await detectGpuEncoder() : { available: false };
+        const useGpu = gpuEncoder.available && outputFormat === 'mp4'; // GPU only for MP4 currently
+        
+        console.log('GPU encoding:', { enabled: gpuEncodingEnabled, available: gpuEncoder.available, encoder: gpuEncoder.encoder, name: gpuEncoder.name });
+        
         return new Promise((resolve, reject) => {
             let command = ffmpeg()
                 .input(inputPattern)
@@ -1027,22 +1099,71 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
             
             // Output format settings
             if (outputFormat === 'mp4') {
-                const outputOpts = [
-                    '-pix_fmt', 'yuv420p',
-                    '-preset', useFastEncode ? 'fast' : 'medium',
-                    '-crf', quality === 'high' ? '18' : quality === 'medium' ? '23' : '28'
-                ];
+                let outputOpts;
                 
-                // Add audio codec if we have audio
-                if (hasAudio) {
-                    outputOpts.push('-c:a', 'aac', '-b:a', '128k');
-                    outputOpts.push('-map', '0:v', '-map', '1:a');
-                    outputOpts.push('-shortest'); // End when shortest stream ends
+                if (useGpu) {
+                    // GPU hardware encoding
+                    const encoder = gpuEncoder.encoder; // h264_nvenc, h264_amf, or h264_qsv
+                    
+                    if (encoder === 'h264_nvenc') {
+                        // NVIDIA NVENC
+                        const preset = quality === 'high' ? 'p7' : quality === 'medium' ? 'p4' : 'p2';
+                        const cq = quality === 'high' ? '18' : quality === 'medium' ? '23' : '28';
+                        outputOpts = [
+                            '-pix_fmt', 'yuv420p',
+                            '-preset', preset,
+                            '-cq', cq,
+                            '-rc', 'vbr'
+                        ];
+                    } else if (encoder === 'h264_amf') {
+                        // AMD AMF
+                        const qualityPreset = quality === 'high' ? 'quality' : quality === 'medium' ? 'balanced' : 'speed';
+                        outputOpts = [
+                            '-pix_fmt', 'yuv420p',
+                            '-quality', qualityPreset,
+                            '-qp_p', quality === 'high' ? '18' : '28',
+                            '-qp_i', quality === 'high' ? '18' : '28'
+                        ];
+                    } else if (encoder === 'h264_qsv') {
+                        // Intel Quick Sync
+                        const preset = quality === 'high' ? 'slower' : quality === 'medium' ? 'medium' : 'fast';
+                        const globalQuality = quality === 'high' ? '18' : quality === 'medium' ? '23' : '28';
+                        outputOpts = [
+                            '-pix_fmt', 'yuv420p',
+                            '-preset', preset,
+                            '-global_quality', globalQuality
+                        ];
+                    }
+                    
+                    // Add audio codec if we have audio
+                    if (hasAudio) {
+                        outputOpts.push('-c:a', 'aac', '-b:a', '128k');
+                        outputOpts.push('-map', '0:v', '-map', '1:a');
+                        outputOpts.push('-shortest');
+                    }
+                    
+                    command = command
+                        .videoCodec(encoder)
+                        .outputOptions(outputOpts);
+                } else {
+                    // Software (CPU) encoding
+                    outputOpts = [
+                        '-pix_fmt', 'yuv420p',
+                        '-preset', useFastEncode ? 'fast' : 'medium',
+                        '-crf', quality === 'high' ? '18' : quality === 'medium' ? '23' : '28'
+                    ];
+                    
+                    // Add audio codec if we have audio
+                    if (hasAudio) {
+                        outputOpts.push('-c:a', 'aac', '-b:a', '128k');
+                        outputOpts.push('-map', '0:v', '-map', '1:a');
+                        outputOpts.push('-shortest'); // End when shortest stream ends
+                    }
+                    
+                    command = command
+                        .videoCodec('libx264')
+                        .outputOptions(outputOpts);
                 }
-                
-                command = command
-                    .videoCodec('libx264')
-                    .outputOptions(outputOpts);
             } else if (outputFormat === 'webm') {
                 const outputOpts = [
                     '-crf', quality === 'high' ? '20' : quality === 'medium' ? '30' : '40',

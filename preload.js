@@ -113,6 +113,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeAllListeners('ffmpeg-progress');
     },
     
+    // GPU encoding
+    getGpuEncoding: () => ipcRenderer.invoke('get-gpu-encoding'),
+    setGpuEncoding: (enabled) => ipcRenderer.invoke('set-gpu-encoding', enabled),
+    detectGpuEncoder: () => ipcRenderer.invoke('detect-gpu-encoder'),
+    
     // Auto-update
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     downloadUpdate: () => ipcRenderer.invoke('download-update'),

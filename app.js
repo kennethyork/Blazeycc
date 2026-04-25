@@ -552,15 +552,9 @@ async function startRecording() {
         state.frameCapturePending = false;
         state.droppedFrames = 0;
         
-        // Get webview's WebContents ID for main-process capture (more reliable)
+        // Get webview's WebContents ID for main-process capture
+        // Note: getWebContents() is deprecated in newer Electron; main process will fall back to mainWindow capture
         let webviewWebContentsId = null;
-        try {
-            const webviewWC = await elements.webview.getWebContents();
-            webviewWebContentsId = webviewWC.id;
-            console.log('Webview webContents ID:', webviewWebContentsId);
-        } catch (e) {
-            console.warn('Could not get webview webContents:', e);
-        }
         
         state.frameCaptureInterval = setInterval(() => {
             if (!state.canvasRecordingActive) return;
@@ -1930,6 +1924,7 @@ function initAnnotations() {
         container.style.width = '100%';
         container.style.height = '100%';
         container.style.zIndex = '100';
+        container.style.pointerEvents = 'none'; // allow scrolling through when annotations off
     }
     
     // Show toolbar for everyone
@@ -2223,8 +2218,11 @@ function resizeAnnotationCanvas() {
     const container = document.getElementById('browserContainer');
     if (!container || !fabricCanvas) return;
     
-    fabricCanvas.setWidth(container.offsetWidth);
-    fabricCanvas.setHeight(container.offsetHeight);
+    const width = container.offsetWidth;
+    const height = container.offsetHeight;
+    
+    // Fabric v7: use setDimensions instead of setWidth/setHeight
+    fabricCanvas.setDimensions({ width, height });
     fabricCanvas.calcOffset();
     fabricCanvas.renderAll();
 }
@@ -2234,6 +2232,7 @@ function toggleAnnotationMode() {
     const canvas = elements.annotationCanvas;
     const tools = elements.annotationTools;
     const toolbar = elements.annotationToolbar;
+    const fabricContainer = fabricCanvas?.wrapperEl;
 
     if (state.annotationEnabled) {
         canvas.style.display = 'block';
@@ -2241,6 +2240,7 @@ function toggleAnnotationMode() {
         tools.style.display = 'flex';
         toolbar.style.display = 'flex';
         elements.annotateToggleBtn?.classList.add('active');
+        if (fabricContainer) fabricContainer.style.pointerEvents = 'auto';
         resizeAnnotationCanvas();
         setAnnotationTool(state.annotationTool || 'select');
         showNotification('Annotation mode enabled — click and drag to draw', 'info');
@@ -2248,6 +2248,7 @@ function toggleAnnotationMode() {
         canvas.classList.remove('active');
         tools.style.display = 'none';
         elements.annotateToggleBtn?.classList.remove('active');
+        if (fabricContainer) fabricContainer.style.pointerEvents = 'none';
         if (fabricCanvas) {
             fabricCanvas.discardActiveObject();
             fabricCanvas.renderAll();

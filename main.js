@@ -20,9 +20,12 @@ async function detectGpuEncoder() {
     
     const ffmpegPath = getFFmpegPath();
     if (!ffmpegPath) {
+        console.log('No FFmpeg path found, cannot detect GPU encoder');
         detectedGpuEncoder = { available: false, h264: null, vp9: null, name: null };
         return detectedGpuEncoder;
     }
+    
+    console.log('Detecting GPU encoders using FFmpeg:', ffmpegPath);
     
     // Test H.264 encoders first (most compatible)
     const h264Encoders = [
@@ -39,11 +42,19 @@ async function detectGpuEncoder() {
             const testResult = await new Promise((resolve) => {
                 const { execFile } = require('child_process');
                 execFile(ffmpegPath, ['-f', 'lavfi', '-i', 'nullsrc=s=320x240:d=0.1', '-c:v', enc.codec, '-f', 'null', '-'], { timeout: 5000 }, (err, stdout, stderr) => {
-                    if (err && stderr && (stderr.includes('not found') || stderr.includes('No NVENC') || stderr.includes('init failed') || stderr.includes('not supported'))) {
-                        resolve(false);
-                    } else {
-                        resolve(true);
-                    }
+                    const output = (stderr || '') + (stdout || '');
+                    console.log(`Testing ${enc.codec}:`, err ? 'exit code ' + err.code : 'success', output.substring(0, 200));
+                    
+                    // Encoder works if output contains encoding progress stats
+                    const success = output.includes('frame=') || output.includes('size=') || output.includes('bitrate=');
+                    const knownFailure = output.includes('Unknown encoder') || 
+                                         output.includes('not found') || 
+                                         output.includes('No NVENC') || 
+                                         output.includes('init failed') || 
+                                         output.includes('not supported') ||
+                                         output.includes('Cannot load');
+                    
+                    resolve(success && !knownFailure);
                 });
             });
             
@@ -53,7 +64,7 @@ async function detectGpuEncoder() {
                 break;
             }
         } catch (e) {
-            // Continue to next encoder
+            console.log(`Error testing ${enc.codec}:`, e.message);
         }
     }
     
@@ -64,25 +75,22 @@ async function detectGpuEncoder() {
     }
     
     // Also test VP9 GPU encoder for WebM support
-    // Map H.264 encoder to corresponding VP9 encoder
     let detectedVp9 = null;
     if (detectedH264 === 'h264_nvenc') {
         detectedVp9 = 'vp9_nvenc';
     } else if (detectedH264 === 'h264_qsv') {
         detectedVp9 = 'vp9_qsv';
     }
-    // AMD doesn't have VP9 hardware encoding
     
     if (detectedVp9) {
         try {
             const vp9Test = await new Promise((resolve) => {
                 const { execFile } = require('child_process');
                 execFile(ffmpegPath, ['-f', 'lavfi', '-i', 'nullsrc=s=320x240:d=0.1', '-c:v', detectedVp9, '-f', 'null', '-'], { timeout: 5000 }, (err, stdout, stderr) => {
-                    if (err && stderr && (stderr.includes('not found') || stderr.includes('No NVENC') || stderr.includes('init failed') || stderr.includes('not supported'))) {
-                        resolve(false);
-                    } else {
-                        resolve(true);
-                    }
+                    const output = (stderr || '') + (stdout || '');
+                    const success = output.includes('frame=') || output.includes('size=');
+                    const knownFailure = output.includes('Unknown encoder') || output.includes('not found') || output.includes('init failed');
+                    resolve(success && !knownFailure);
                 });
             });
             if (!vp9Test) detectedVp9 = null;

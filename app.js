@@ -1229,13 +1229,20 @@ async function loadGpuEncoding() {
     try {
         const gpuInfo = await window.electronAPI.detectGpuEncoder();
         if (gpuInfo.available) {
-            elements.gpuEncodingSetting.style.display = 'block';
+            elements.gpuEncodingToggle.disabled = false;
             elements.gpuEncoderInfo.textContent = `Detected: ${gpuInfo.name}`;
             const enabled = await window.electronAPI.getGpuEncoding();
             elements.gpuEncodingToggle.checked = enabled;
+        } else {
+            elements.gpuEncodingToggle.disabled = true;
+            elements.gpuEncodingToggle.checked = false;
+            elements.gpuEncoderInfo.textContent = 'No GPU encoder detected (CPU encoding only)';
         }
     } catch (e) {
         console.log('GPU detection failed:', e);
+        elements.gpuEncodingToggle.disabled = true;
+        elements.gpuEncodingToggle.checked = false;
+        elements.gpuEncoderInfo.textContent = 'GPU detection failed (CPU encoding only)';
     }
     
     // Add event listener

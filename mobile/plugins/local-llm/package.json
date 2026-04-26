@@ -2,9 +2,9 @@
   "name": "@blazeycc/local-llm",
   "version": "1.0.0",
   "description": "On-device LLM inference for Blazeycc mobile via llama.cpp",
-  "main": "dist/plugin.cjs.js",
-  "module": "dist/esm/index.js",
-  "types": "dist/esm/index.d.ts",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/definitions.ts",
   "files": [
     "android/src/main/",
     "dist/"

@@ -2,9 +2,9 @@
   "name": "@blazeycc/screen-recorder",
   "version": "1.0.0",
   "description": "Native screen recording for Blazeycc mobile",
-  "main": "dist/plugin.cjs.js",
-  "module": "dist/esm/index.js",
-  "types": "dist/esm/index.d.ts",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/definitions.ts",
   "files": [
     "android/src/main/",
     "dist/"

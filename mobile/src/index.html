@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Blazeycc</title>
+    <link rel="stylesheet" href="css/mobile.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🎬 Blazeycc</h1>
+        </header>
+
+        <!-- URL Input -->
+        <section class="url-section">
+            <input type="url" id="urlInput" placeholder="Enter website URL">
+            <button id="loadBtn" class="btn btn-primary">🌐 Load</button>
+        </section>
+
+        <!-- Recording Controls -->
+        <div class="record-bar">
+            <button id="recordBtn" class="btn btn-record" disabled>🔴 Record</button>
+            <button id="stopBtn" class="btn btn-stop" disabled>⏹ Stop</button>
+            <span id="recordingTimer" class="timer">00:00</span>
+        </div>
+
+        <!-- Browser / WebView Area -->
+        <div class="browser-container" id="browserContainer">
+            <div class="placeholder" id="placeholder">
+                <div class="placeholder-icon">🌐</div>
+                <p>Enter a URL to start</p>
+            </div>
+            <iframe id="browserFrame" style="display:none;width:100%;height:100%;border:none;"></iframe>
+        </div>
+
+        <!-- Settings Toggle -->
+        <button id="settingsToggle" class="btn btn-icon settings-fab">⚙️</button>
+
+        <!-- Settings Panel (bottom sheet) -->
+        <div class="settings-sheet" id="settingsSheet">
+            <div class="sheet-header">
+                <div class="sheet-handle"></div>
+                <h3>Settings</h3>
+            </div>
+            <div class="sheet-content">
+                <div class="setting-group">
+                    <label>Preset</label>
+                    <select id="formatPreset">
+                        <option value="custom">Custom</option>
+                        <option value="yt-shorts" selected>YouTube Shorts (9:16)</option>
+                        <option value="ig-story">Instagram Story/Reels</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="yt-1080p">YouTube 1080p</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Quality</label>
+                    <select id="qualitySetting">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Frame Rate</label>
+                    <select id="frameRateSelect">
+                        <option value="15" selected>15 FPS</option>
+                        <option value="30">30 FPS</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="autoZoomToggle" checked>
+                        Auto-Zoom on Tap
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="motionBlurToggle">
+                        Motion Blur
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Modal -->
+        <div class="preview-modal" id="previewModal" style="display:none;">
+            <div class="preview-content">
+                <video id="previewVideo" controls playsinline></video>
+                <div class="preview-actions">
+                    <button id="discardBtn" class="btn btn-danger">🗑️ Discard</button>
+                    <button id="shareBtn" class="btn btn-primary">📤 Share</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/mobile-app.js"></script>
+</body>
+</html>

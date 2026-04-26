@@ -122,10 +122,14 @@ npm run build:win     # Windows (exe, portable)
 │   ├── recording.js      # Recording, canvas capture, audio, trim
 │   ├── annotations.js    # Interactive annotation system
 │   ├── ai.js             # Ollama config & AI metadata generation
+│   ├── ai-features.js    # Smart chapters, clips, thumbnails
 │   ├── features.js       # Batch, scheduled, watermark, fast encoding
 │   └── app.js            # Main init & event wiring
 ├── index.html            # Main UI
 ├── preload.js            # IPC bridge
+├── mobile/               # Capacitor mobile app (iOS/Android)
+│   ├── src/              # Mobile HTML/CSS/JS
+│   └── plugins/          # Custom native plugins
 └── docs/                 # Marketing site (blazeycc.com)
 ```
 

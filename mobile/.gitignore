@@ -1,0 +1,15 @@
+# Mobile build artifacts
+android/
+ios/
+dist/
+node_modules/
+
+# Xcode
+*.xcworkspace
+*.xcuserdata
+DerivedData/
+
+# Android
+*.iml
+.gradle/
+local.properties

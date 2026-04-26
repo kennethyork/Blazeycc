@@ -1,0 +1,27 @@
+{
+  "name": "@blazeycc/screen-recorder",
+  "version": "1.0.0",
+  "description": "Native screen recording for Blazeycc mobile",
+  "main": "dist/plugin.cjs.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/esm/index.d.ts",
+  "files": [
+    "android/src/main/",
+    "ios/Sources/",
+    "dist/"
+  ],
+  "scripts": {
+    "build": "npm run clean && npm run compile",
+    "clean": "rimraf ./dist",
+    "compile": "tsc"
+  },
+  "license": "GPL-3.0",
+  "peerDependencies": {
+    "@capacitor/core": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/core": "^6.0.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.0.0"
+  }
+}

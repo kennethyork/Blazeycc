@@ -111,7 +111,12 @@ Java_com_blazeycc_localllm_LocalLlmPlugin_nativeGenerate(JNIEnv* env, jobject /*
     // Evaluate prompt
     llama_batch batch = llama_batch_init(prompt_tokens.size(), 0, 1);
     for (size_t i = 0; i < prompt_tokens.size(); i++) {
-        llama_batch_add(batch, prompt_tokens[i], i, {0}, false);
+        batch.token[batch.n_tokens] = prompt_tokens[i];
+        batch.pos[batch.n_tokens] = i;
+        batch.n_seq_id[batch.n_tokens] = 1;
+        batch.seq_id[batch.n_tokens][0] = 0;
+        batch.logits[batch.n_tokens] = 0;
+        batch.n_tokens++;
     }
     batch.logits[batch.n_tokens - 1] = true;
 
@@ -142,7 +147,12 @@ Java_com_blazeycc_localllm_LocalLlmPlugin_nativeGenerate(JNIEnv* env, jobject /*
 
         // Evaluate the new token
         llama_batch batch_next = llama_batch_init(1, 0, 1);
-        llama_batch_add(batch_next, new_token_id, prompt_tokens.size() + i, {0}, true);
+        batch_next.token[0] = new_token_id;
+        batch_next.pos[0] = prompt_tokens.size() + i;
+        batch_next.n_seq_id[0] = 1;
+        batch_next.seq_id[0][0] = 0;
+        batch_next.logits[0] = true;
+        batch_next.n_tokens = 1;
         if (llama_decode(g_ctx, batch_next) != 0) {
             llama_batch_free(batch_next);
             break;

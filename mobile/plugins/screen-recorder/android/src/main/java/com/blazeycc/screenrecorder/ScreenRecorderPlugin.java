@@ -1,6 +1,10 @@
 package com.blazeycc.screenrecorder;
 
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.display.DisplayManager;
@@ -8,6 +12,7 @@ import android.hardware.display.VirtualDisplay;
 import android.media.MediaRecorder;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
+import android.os.Build;
 import android.os.Environment;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -27,6 +32,8 @@ import java.util.Date;
 public class ScreenRecorderPlugin extends Plugin {
     private static final int REQUEST_CODE = 1001;
     private static final String TAG = "ScreenRecorder";
+    private static final String CHANNEL_ID = "blazeycc_recording";
+    private static final int NOTIF_ID = 2001;
 
     private MediaProjectionManager projectionManager;
     private MediaProjection mediaProjection;
@@ -38,7 +45,6 @@ public class ScreenRecorderPlugin extends Plugin {
     private int screenHeight;
     private boolean isRecording = false;
 
-    // Recording options from startRecording call
     private int optVideoBitrate = 8 * 1000 * 1000;
     private int optFrameRate = 30;
     private String optFormat = "mp4";
@@ -51,6 +57,50 @@ public class ScreenRecorderPlugin extends Plugin {
         screenDensity = metrics.densityDpi;
         screenWidth = metrics.widthPixels;
         screenHeight = metrics.heightPixels;
+        createNotificationChannel();
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID, "Screen Recording", NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("Shows while Blazeycc is recording your screen");
+            nm.createNotificationChannel(channel);
+        }
+    }
+
+    private void showRecordingNotification() {
+        Context ctx = getContext();
+        Intent intent = new Intent(ctx, getActivity().getClass());
+        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            ctx, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        Notification.Builder builder;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder = new Notification.Builder(ctx, CHANNEL_ID);
+        } else {
+            builder = new Notification.Builder(ctx);
+        }
+
+        Notification notification = builder
+            .setContentTitle("Blazeycc Recording")
+            .setContentText("Screen recording in progress...")
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setOngoing(true)
+            .setContentIntent(pendingIntent)
+            .build();
+
+        NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        nm.notify(NOTIF_ID, notification);
+    }
+
+    private void cancelRecordingNotification() {
+        NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+        nm.cancel(NOTIF_ID);
     }
 
     @PluginMethod
@@ -60,7 +110,6 @@ public class ScreenRecorderPlugin extends Plugin {
             return;
         }
 
-        // Parse options
         Integer bitrate = call.getInt("videoBitrate");
         Integer fps = call.getInt("frameRate");
         String format = call.getString("format");
@@ -115,6 +164,7 @@ public class ScreenRecorderPlugin extends Plugin {
             try { new File(savedPath).delete(); } catch (Exception ignored) {}
             isRecording = false;
             cleanupRecorder();
+            cancelRecordingNotification();
             call.reject("Recording too short — no data captured. Record for at least 2 seconds.");
             return;
         }
@@ -124,6 +174,7 @@ public class ScreenRecorderPlugin extends Plugin {
             virtualDisplay.release();
             mediaProjection.stop();
             isRecording = false;
+            cancelRecordingNotification();
 
             JSObject result = new JSObject();
             result.put("path", savedPath);
@@ -132,6 +183,7 @@ public class ScreenRecorderPlugin extends Plugin {
             Log.e(TAG, "Stop recording failed", e);
             isRecording = false;
             cleanupRecorder();
+            cancelRecordingNotification();
             call.reject(e.getMessage());
         }
     }
@@ -171,6 +223,7 @@ public class ScreenRecorderPlugin extends Plugin {
                 );
                 mediaRecorder.start();
                 isRecording = true;
+                showRecordingNotification();
 
                 JSObject result = new JSObject();
                 result.put("started", true);

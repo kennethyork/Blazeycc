@@ -352,14 +352,35 @@ function showNotification(message, type = 'info') {
 // URL LOADING
 // =====================
 
+// Known domains that block iframe embedding — auto-open in system browser
+const BLOCKED_DOMAINS = [
+    'youtube.com', 'youtu.be',
+    'twitter.com', 'x.com',
+    'facebook.com', 'fb.com', 'instagram.com',
+    'tiktok.com',
+    'reddit.com',
+    'netflix.com',
+    'spotify.com',
+    'discord.com',
+    'linkedin.com'
+];
+
+function isBlockedDomain(url) {
+    try {
+        const hostname = new URL(url).hostname.toLowerCase();
+        return BLOCKED_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d));
+    } catch (e) {
+        return false;
+    }
+}
+
 let iframeLoadTimeout = null;
 
-function loadWebsite() {
+async function loadWebsite() {
     let url = elements.urlInput.value.trim();
     if (!url) return;
     if (!url.match(/^https?:\/\//i)) url = 'https://' + url;
 
-    // Validate URL
     try {
         new URL(url);
     } catch (e) {
@@ -368,21 +389,34 @@ function loadWebsite() {
     }
 
     state.currentUrl = url;
+
+    // Auto-detect blocked domains and open in system browser immediately
+    if (isBlockedDomain(url)) {
+        elements.placeholder.style.display = 'none';
+        elements.browserFrame.style.display = 'none';
+        elements.iframeSpinner.style.display = 'none';
+        document.getElementById('iframeError').style.display = 'none';
+        state.websiteLoaded = true;
+        elements.recordBtn.disabled = false;
+        elements.addBookmarkBtn.disabled = false;
+        applyPresetAspectRatio();
+        showNotification('Opening in system browser (screen recording still works)', 'info');
+        await openInSystemBrowser();
+        return;
+    }
+
     elements.placeholder.style.display = 'none';
     elements.browserFrame.style.display = 'block';
     elements.iframeSpinner.style.display = 'flex';
     document.getElementById('iframeError').style.display = 'none';
 
-    // Clear previous timeout
     if (iframeLoadTimeout) clearTimeout(iframeLoadTimeout);
 
-    // Set iframe src
     elements.browserFrame.src = url;
     state.websiteLoaded = true;
     elements.recordBtn.disabled = false;
     elements.addBookmarkBtn.disabled = false;
 
-    // Timeout: if iframe hasn't loaded in 8s, show error overlay
     iframeLoadTimeout = setTimeout(() => {
         if (elements.iframeSpinner.style.display === 'flex') {
             elements.iframeSpinner.style.display = 'none';

@@ -36,7 +36,16 @@ echo "Using NDK: $NDK"
 if [ ! -d "$CPP_DIR/llama.cpp" ]; then
     echo ""
     echo "Cloning llama.cpp..."
-    git clone --depth 1 --branch b4000 https://github.com/ggerganov/llama.cpp.git "$CPP_DIR/llama.cpp"
+    git clone --depth 1 --branch b4400 https://github.com/ggml-org/llama.cpp.git "$CPP_DIR/llama.cpp"
+    if [ $? -ne 0 ]; then
+        echo "Failed to clone llama.cpp. Trying fallback URL..."
+        git clone --depth 1 --branch b4400 https://github.com/ggerganov/llama.cpp.git "$CPP_DIR/llama.cpp"
+    fi
+fi
+
+if [ ! -f "$CPP_DIR/llama.cpp/include/llama.h" ]; then
+    echo "ERROR: llama.cpp clone failed or is incomplete"
+    exit 1
 fi
 
 ABIS=("arm64-v8a" "armeabi-v7a" "x86_64")

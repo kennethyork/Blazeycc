@@ -35,7 +35,6 @@ Java_com_blazeycc_localllm_LocalLlmPlugin_nativeLoadModel(JNIEnv* env, jobject /
 
     // Create sampler: temperature + top-p + repeat penalty
     g_sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_softmax());
     llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(0.95f, 1));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(0.7f));
     llama_sampler_chain_add(g_sampler, llama_sampler_init_dist(1234));
@@ -62,7 +61,7 @@ Java_com_blazeycc_localllm_LocalLlmPlugin_nativeUnloadModel(JNIEnv* /*env*/, job
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_blazeycc_localllm_LocalLlmPlugin_nativeGenerate(JNIEnv* env, jobject /*thiz",
+Java_com_blazeycc_localllm_LocalLlmPlugin_nativeGenerate(JNIEnv* env, jobject /*thiz*/,
                                                           jstring prompt,
                                                           jint max_tokens,
                                                           jfloat temperature) {

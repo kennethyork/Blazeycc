@@ -14,8 +14,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    continue-on-error: true
+    timeout-minutes: 3
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,7 +32,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        run: xvfb-run npx playwright test
+        run: xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' npx playwright test
 
   build-linux:
     runs-on: ubuntu-latest

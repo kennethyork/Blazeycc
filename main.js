@@ -910,7 +910,27 @@ ipcMain.handle('start-canvas-recording', async (event, { fps, webContentsId }) =
     try {
         const ffmpegPath = getFFmpegPath();
         if (!ffmpegPath) {
-            return { success: false, error: 'FFmpeg not found' };
+            return { success: false, error: 'FFmpeg not found. Please install FFmpeg or check your installation.' };
+        }
+
+        // Check disk space before starting (need at least 500MB free)
+        try {
+            const savePath = store.get('savePath', path.join(os.homedir(), 'Downloads'));
+            const { execSync } = require('child_process');
+            let freeBytes = 0;
+            if (process.platform === 'win32') {
+                const drive = path.parse(savePath).root;
+                const out = execSync(`wmic logicaldisk where "DeviceID='${drive.replace('\\', '')}'" get FreeSpace`, { encoding: 'utf8' });
+                freeBytes = parseInt(out.replace(/\D/g, ''));
+            } else {
+                const out = execSync(`df -P "${savePath}" | tail -1 | awk '{print $4}'`, { encoding: 'utf8' });
+                freeBytes = parseInt(out.trim()) * 512;
+            }
+            if (freeBytes < 500 * 1024 * 1024) {
+                return { success: false, error: `Disk space too low (${Math.round(freeBytes / 1024 / 1024)}MB free). Need at least 500MB.` };
+            }
+        } catch (e) {
+            // Disk check failed, continue anyway
         }
 
         const tempDir = path.join(os.tmpdir(), `blazeycc-recording-${Date.now()}`);
@@ -1523,8 +1543,50 @@ ipcMain.handle('extract-frames', async (event, videoPath, count = 10) => {
     }
 });
 
+// Cleanup temp recording directories on quit and startup
+function cleanupTempDirs() {
+    try {
+        const tmpDir = os.tmpdir();
+        const entries = fs.readdirSync(tmpDir);
+        let cleaned = 0;
+        for (const entry of entries) {
+            if (entry.startsWith('blazeycc-recording-')) {
+                const fullPath = path.join(tmpDir, entry);
+                try {
+                    const stat = fs.statSync(fullPath);
+                    // Only delete if older than 24 hours or if force cleanup
+                    const ageHours = (Date.now() - stat.mtimeMs) / (1000 * 60 * 60);
+                    if (ageHours > 24) {
+                        fs.rmSync(fullPath, { recursive: true, force: true });
+                        cleaned++;
+                    }
+                } catch (e) {}
+            }
+        }
+        if (cleaned > 0) console.log(`Cleaned up ${cleaned} old temp recording directories`);
+    } catch (e) {}
+}
+
+// Clean orphaned temp dirs on startup
+app.on('ready', cleanupTempDirs);
+
+// Clean active temp dir on quit
+app.on('before-quit', () => {
+    if (canvasRecordingSession?.tempDir) {
+        try {
+            fs.rmSync(canvasRecordingSession.tempDir, { recursive: true, force: true });
+        } catch (e) {}
+    }
+});
+
 process.on('uncaughtException', (error) => {
     console.error('Uncaught exception:', error);
+    // Clean up temp dir on crash
+    if (canvasRecordingSession?.tempDir) {
+        try {
+            fs.rmSync(canvasRecordingSession.tempDir, { recursive: true, force: true });
+        } catch (e) {}
+    }
 });
 
 app.on('window-all-closed', () => {

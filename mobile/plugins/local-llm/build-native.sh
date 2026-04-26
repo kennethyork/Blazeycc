@@ -48,12 +48,12 @@ if [ ! -f "$CPP_DIR/llama.cpp/include/llama.h" ]; then
     exit 1
 fi
 
-ABIS=("arm64-v8a" "armeabi-v7a" "x86_64")
+ABIS=("arm64-v8a" "armeabi-v7a")
 API_LEVEL=24
 
 echo ""
 echo "Building liblocal-llm-jni.so for ${#ABIS[@]} architectures..."
-echo "This will take 2-5 minutes. Grab a coffee ☕"
+echo "This will take 1-3 minutes. Grab a coffee ☕"
 echo ""
 
 for ABI in "${ABIS[@]}"; do

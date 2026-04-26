@@ -1,4 +1,4 @@
-name: Build and Release
+name: Unified Release
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to build (e.g., 1.0.1)'
+        description: 'Version to build (e.g., 1.10.0)'
         required: false
         default: ''
 
@@ -61,8 +61,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-builds
-          path: |
-            dist/*.exe
+          path: dist/*.exe
 
   build-mac:
     runs-on: macos-latest
@@ -90,8 +89,64 @@ jobs:
             dist/*.dmg
             dist/*.zip
 
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install mobile dependencies
+        working-directory: ./mobile
+        run: npm ci
+
+      - name: Build mobile web assets
+        working-directory: ./mobile
+        run: npm run build
+
+      - name: Add Android platform
+        working-directory: ./mobile
+        run: npx cap add android
+
+      - name: Sync Capacitor
+        working-directory: ./mobile
+        run: npx cap sync android
+
+      - name: Build Android Debug APK
+        working-directory: ./mobile/android
+        run: ./gradlew assembleDebug
+
+      - name: Build Android Release APK
+        working-directory: ./mobile/android
+        run: ./gradlew assembleRelease
+
+      - name: Upload Android APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-builds
+          path: |
+            mobile/android/app/build/outputs/apk/debug/*.apk
+            mobile/android/app/build/outputs/apk/release/*.apk
+
   release:
-    needs: [build-linux, build-windows, build-mac]
+    needs: [build-linux, build-windows, build-mac, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -101,17 +156,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: '*-builds'
 
       - name: Display structure
         run: ls -R artifacts
 
-      - name: Create Release
+      - name: Create Unified Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
             artifacts/linux-builds/*
             artifacts/windows-builds/*
             artifacts/mac-builds/*
+            artifacts/android-builds/*
           draft: false
           prerelease: false
           generate_release_notes: true

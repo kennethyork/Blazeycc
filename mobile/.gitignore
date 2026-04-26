@@ -1,5 +1,5 @@
 # Mobile build artifacts
-android/
+/android/          # Capacitor-generated android project (root only)
 dist/
 node_modules/
 

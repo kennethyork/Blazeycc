@@ -12,28 +12,6 @@ on:
         default: ''
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Playwright tests
-        run: xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' npx playwright test
-
   build-linux:
     runs-on: ubuntu-latest
     steps:

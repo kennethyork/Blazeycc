@@ -111,6 +111,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+          link-to-system: true
+
       - name: Install root dependencies
         run: npm ci
 
@@ -121,6 +127,12 @@ jobs:
       - name: Build mobile web assets
         working-directory: ./mobile
         run: npm run build
+
+      - name: Build native libraries (llama.cpp JNI)
+        working-directory: ./mobile/plugins/local-llm
+        run: ./build-native.sh
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
       - name: Add Android platform
         working-directory: ./mobile
@@ -138,13 +150,20 @@ jobs:
         working-directory: ./mobile/android
         run: ./gradlew assembleRelease
 
-      - name: Upload Android artifacts
+      - name: Upload Android APKs
         uses: actions/upload-artifact@v4
         with:
           name: android-builds
           path: |
             mobile/android/app/build/outputs/apk/debug/*.apk
             mobile/android/app/build/outputs/apk/release/*.apk
+
+      - name: Upload native libraries as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native-libs
+          path: |
+            mobile/plugins/local-llm/android/src/main/jniLibs/**/*.so
 
   release:
     needs: [build-linux, build-windows, build-mac, build-android]

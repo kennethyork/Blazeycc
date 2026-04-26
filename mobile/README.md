@@ -2,58 +2,65 @@
 
 Capacitor-based mobile app for Android. Record your screen while browsing websites.
 
-## Architecture
+## Quick Start (No NDK needed!)
 
-- **Web layer:** Existing HTML/CSS/JS adapted for mobile (touch-friendly, responsive)
-- **Native layer:** Custom Capacitor plugins using MediaProjection (screen record) + llama.cpp (on-device AI)
-- **Recording:** Native screen capture, not canvas-based
-
-## Prerequisites
+If prebuilt `.so` files are already committed in this repo:
 
 ```bash
 cd mobile
 npm install
-```
-
-## Android Setup
-
-### 1. Clone llama.cpp (required for on-device AI)
-
-```bash
-cd mobile/plugins/local-llm/android/src/main/cpp
-git clone https://github.com/ggerganov/llama.cpp.git
-cd llama.cpp
-git checkout b4000  # stable release around late 2024
-cd ../../../../../../../..
-```
-
-### 2. Add Android platform
-
-```bash
-npx cap add android
-npx cap sync android
-npx cap open android
-```
-
-Then build in Android Studio. Requires Android SDK 33+ and NDK 25+.
-
-## Development (Web)
-
-```bash
-npm run dev
-```
-
-## Build for Production
-
-```bash
 npm run build
 npx cap sync android
+npx cap open android
+# Click ▶️ Run in Android Studio
 ```
+
+**Requirements:** Android Studio + SDK 33+. No NDK, no CMake, no C++ needed.
+
+---
+
+## First-Time Setup (for maintainers)
+
+If native libraries are missing, build them once with the Android NDK:
+
+### 1. Install Android NDK
+Via Android Studio: **Tools → SDK Manager → SDK Tools → NDK (Side by side)**
+
+### 2. Set environment variable
+```bash
+export ANDROID_NDK_HOME="$HOME/Android/Sdk/ndk/25.2.9519653"
+```
+
+### 3. Build native libraries
+```bash
+cd mobile/plugins/local-llm
+./build-native.sh
+```
+
+This runs for ~3 minutes and outputs `.so` files to `android/src/main/jniLibs/`. After this, commit them:
+
+```bash
+git add android/src/main/jniLibs/
+git commit -m "Add prebuilt native libraries"
+```
+
+From then on, **anyone can build the Android app without NDK**.
+
+---
+
+## Architecture
+
+- **Web layer:** HTML/CSS/JS adapted for mobile (touch-friendly, responsive)
+- **Native layer:** Custom Capacitor plugins
+  - `screen-recorder` — MediaProjection API for screen capture
+  - `local-llm` — llama.cpp via JNI for on-device AI
+
+---
 
 ## Plugins
 
 ### Screen Recorder
-Located in `plugins/screen-recorder/`. Uses `MediaProjection` API for native screen capture with H.264 hardware encoding.
+Located in `plugins/screen-recorder/`. Uses `MediaProjection` API for native screen recording with H.264 hardware encoding.
 
 ```typescript
 ScreenRecorder.startRecording(): Promise<{ started: boolean }>
@@ -68,6 +75,8 @@ LocalLlm.downloadModel({ url, filename }): Promise<{ success: boolean }>
 LocalLlm.loadModel({ path }): Promise<{ success: boolean }>
 LocalLlm.generate({ prompt, maxTokens, temperature }): Promise<{ text: string }>
 ```
+
+---
 
 ## AI Backends
 
@@ -85,16 +94,18 @@ Connects to Ollama running on your laptop via WiFi.
 - **Cons:** Requires laptop on same network
 - **Setup:** On laptop run `OLLAMA_HOST=0.0.0.0:11434 ollama serve`, then enter laptop IP in app
 
+---
+
 ## Feature Comparison
 
 | Feature | Desktop | Mobile |
 |---------|---------|--------|
-| URL-to-video | ✅ Direct webview capture | ✅ Screen recording |
+| URL-to-video | ✅ Direct webview | ✅ Screen recording |
 | Annotations | ✅ Canvas overlay | ✅ Canvas overlay |
 | Auto-zoom | ✅ CSS transform | ✅ CSS transform |
 | Auto-scroll | ✅ | ✅ |
 | Zoom controls | ✅ | ✅ |
-| Motion blur | ✅ FFmpeg tmix | ❌ Not possible |
+| Motion blur | ✅ FFmpeg tmix | ❌ No FFmpeg |
 | Webcam bubble | ✅ FFmpeg overlay | ❌ Not possible |
 | AI (local) | ❌ | ✅ llama.cpp JNI |
 | AI (remote) | ✅ Ollama | ✅ Ollama WiFi |
@@ -104,13 +115,7 @@ Connects to Ollama running on your laptop via WiFi.
 | History | ✅ | ✅ |
 | Theme toggle | ✅ | ✅ |
 
-## Differences from Desktop
-
-1. **No embedded browser** — Uses iframe (limited by CORS)
-2. **Native screen recording** — Captures entire screen via MediaProjection
-3. **Mobile-optimized presets** — Defaults to 9:16 (Shorts/Reels/TikTok)
-4. **Touch UI** — Bottom sheet settings, floating action button, swipe gestures
-5. **Native share** — System share sheet to TikTok/Instagram/Reels
+---
 
 ## Known Issues
 

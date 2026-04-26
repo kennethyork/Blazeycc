@@ -6,6 +6,8 @@ import { LocalLlm } from '@blazeycc/local-llm';
 import { Share } from '@capacitor/share';
 import { Toast } from '@capacitor/toast';
 import { Browser } from '@capacitor/browser';
+import { App } from '@capacitor/app';
+import { Keyboard } from '@capacitor/keyboard';
 import { Capacitor } from '@capacitor/core';
 
 // =====================
@@ -85,8 +87,11 @@ const elements = {
     settingsSheet: document.getElementById('settingsSheet'),
     previewModal: document.getElementById('previewModal'),
     previewVideo: document.getElementById('previewVideo'),
+    closePreviewBtn: document.getElementById('closePreviewBtn'),
     discardBtn: document.getElementById('discardBtn'),
     shareBtn: document.getElementById('shareBtn'),
+    browserWrapper: document.getElementById('browserWrapper'),
+    iframeSpinner: document.getElementById('iframeSpinner'),
     formatPreset: document.getElementById('formatPreset'),
     qualitySetting: document.getElementById('qualitySetting'),
     frameRateSelect: document.getElementById('frameRateSelect'),
@@ -273,6 +278,7 @@ function init() {
         elements.scheduleSection.style.display = e.target.checked ? 'block' : 'none';
     });
     elements.addScheduleBtn.addEventListener('click', addScheduledRecording);
+    loadScheduledRecordings();
 
     // Preview
     elements.closePreviewBtn.addEventListener('click', closePreview);
@@ -286,6 +292,47 @@ function init() {
         if (e.touches[0].clientY - touchStartY > 80 && elements.settingsSheet.scrollTop === 0) {
             closeSettings();
         }
+    });
+
+    // Hardware back button
+    App.addListener('backButton', ({ canGoBack }) => {
+        if (elements.previewModal.style.display === 'flex') {
+            closePreview();
+            return;
+        }
+        if (elements.onboardingModal.style.display === 'flex') {
+            closeOnboarding();
+            return;
+        }
+        if (elements.settingsSheet.classList.contains('open')) {
+            closeSettings();
+            return;
+        }
+        if (elements.aiAssistPanel.style.display !== 'none') {
+            togglePanel('ai');
+            return;
+        }
+        if (elements.historyPanel.style.display !== 'none') {
+            togglePanel('history');
+            return;
+        }
+        if (state.annotationEnabled) {
+            toggleAnnotations();
+            return;
+        }
+        if (canGoBack) {
+            window.history.back();
+        } else {
+            App.exitApp();
+        }
+    });
+
+    // Keyboard visibility handling
+    Keyboard.addListener('keyboardWillShow', () => {
+        document.body.classList.add('keyboard-open');
+    });
+    Keyboard.addListener('keyboardWillHide', () => {
+        document.body.classList.remove('keyboard-open');
     });
 }
 
@@ -305,33 +352,69 @@ function showNotification(message, type = 'info') {
 // URL LOADING
 // =====================
 
+let iframeLoadTimeout = null;
+
 function loadWebsite() {
     let url = elements.urlInput.value.trim();
     if (!url) return;
     if (!url.match(/^https?:\/\//i)) url = 'https://' + url;
 
+    // Validate URL
+    try {
+        new URL(url);
+    } catch (e) {
+        showNotification('Invalid URL', 'error');
+        return;
+    }
+
     state.currentUrl = url;
     elements.placeholder.style.display = 'none';
     elements.browserFrame.style.display = 'block';
+    elements.iframeSpinner.style.display = 'flex';
+    document.getElementById('iframeError').style.display = 'none';
+
+    // Clear previous timeout
+    if (iframeLoadTimeout) clearTimeout(iframeLoadTimeout);
+
+    // Set iframe src
     elements.browserFrame.src = url;
     state.websiteLoaded = true;
-
     elements.recordBtn.disabled = false;
     elements.addBookmarkBtn.disabled = false;
 
-    // Hide error overlay if previously shown
-    const errorOverlay = document.getElementById('iframeError');
-    if (errorOverlay) errorOverlay.style.display = 'none';
+    // Timeout: if iframe hasn't loaded in 8s, show error overlay
+    iframeLoadTimeout = setTimeout(() => {
+        if (elements.iframeSpinner.style.display === 'flex') {
+            elements.iframeSpinner.style.display = 'none';
+            showIframeError();
+        }
+    }, 8000);
 
     applyPresetAspectRatio();
-    showNotification('Loading website...', 'info');
+}
+
+// Handle iframe load success
+if (elements.browserFrame) {
+    elements.browserFrame.addEventListener('load', () => {
+        if (iframeLoadTimeout) clearTimeout(iframeLoadTimeout);
+        elements.iframeSpinner.style.display = 'none';
+        showNotification('Website loaded', 'success');
+    });
+}
+
+function showIframeError() {
+    const errorOverlay = document.getElementById('iframeError');
+    if (errorOverlay) {
+        errorOverlay.style.display = 'flex';
+        elements.browserFrame.style.display = 'none';
+    }
+    showNotification('Site blocked in embedded browser. Use system browser.', 'warning');
 }
 
 function handleIframeError() {
-    const errorOverlay = document.getElementById('iframeError');
-    if (errorOverlay) errorOverlay.style.display = 'flex';
-    elements.browserFrame.style.display = 'none';
-    showNotification('Site blocked in embedded browser. Use system browser.', 'warning');
+    if (iframeLoadTimeout) clearTimeout(iframeLoadTimeout);
+    elements.iframeSpinner.style.display = 'none';
+    showIframeError();
 }
 
 async function openInSystemBrowser() {
@@ -373,8 +456,30 @@ function applyPresetAspectRatio() {
 // RECORDING
 // =====================
 
+let wakeLock = null;
+
+async function acquireWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+        }
+    } catch (e) { /* ignore */ }
+}
+
+async function releaseWakeLock() {
+    try {
+        if (wakeLock) {
+            await wakeLock.release();
+            wakeLock = null;
+        }
+    } catch (e) { /* ignore */ }
+}
+
 async function startRecording() {
-    if (!state.websiteLoaded) return;
+    if (!state.websiteLoaded) {
+        showNotification('Load a website first', 'error');
+        return;
+    }
 
     try {
         const result = await ScreenRecorder.startRecording();
@@ -389,6 +494,8 @@ async function startRecording() {
 
         state.timerInterval = setInterval(updateTimer, 1000);
         updateTimer();
+
+        await acquireWakeLock();
 
         if (elements.autoZoomToggle.checked) injectAutoZoom();
 
@@ -408,6 +515,7 @@ async function stopRecording() {
         state.lastRecordingDuration = Math.floor((Date.now() - state.recordingStartTime) / 1000);
 
         clearInterval(state.timerInterval);
+        await releaseWakeLock();
         elements.recordBtn.disabled = false;
         elements.stopBtn.disabled = true;
         elements.recordingTimer.textContent = '00:00';
@@ -418,6 +526,12 @@ async function stopRecording() {
 
         showNotification('Recording saved!', 'success');
     } catch (error) {
+        state.isRecording = false;
+        await releaseWakeLock();
+        clearInterval(state.timerInterval);
+        elements.recordBtn.disabled = false;
+        elements.stopBtn.disabled = true;
+        hideRecordingIndicator();
         showNotification('Failed: ' + error.message, 'error');
     }
 }
@@ -471,7 +585,11 @@ async function shareVideo() {
     if (!state.lastVideoPath) return;
     try {
         await Share.share({ title: 'Blazeycc Recording', files: [state.lastVideoPath], dialogTitle: 'Share' });
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        if (e.message && !e.message.includes('cancelled')) {
+            showNotification('Share failed: ' + e.message, 'error');
+        }
+    }
 }
 
 // =====================
@@ -511,7 +629,15 @@ function injectAutoZoom() {
 
     try {
         frame.contentWindow.postMessage({ type: 'blazeycc-autozoom', zoom, duration }, '*');
-    } catch (e) {}
+    } catch (e) {
+        // Cross-origin iframe — apply zoom via CSS instead
+        state.zoomLevel = zoom;
+        applyZoom();
+        setTimeout(() => {
+            state.zoomLevel = 1;
+            applyZoom();
+        }, duration);
+    }
 }
 
 // Listen for messages from iframe for auto-zoom
@@ -546,7 +672,16 @@ function startAutoScroll() {
             if (frame && frame.contentWindow) {
                 frame.contentWindow.scrollBy(0, 3);
             }
-        } catch (e) {}
+        } catch (e) {
+            // Cross-origin iframe — can't scroll programmatically
+            // Fallback: scroll the iframe element itself via CSS transform
+            try {
+                const currentTransform = frame.style.transform || '';
+                const match = currentTransform.match(/translateY\(([-\d.]+)px\)/);
+                const currentY = match ? parseFloat(match[1]) : 0;
+                frame.style.transform = `scale(${state.zoomLevel}) translateY(${currentY - 3}px)`;
+            } catch (e2) {}
+        }
     }, 50);
 }
 
@@ -878,7 +1013,9 @@ function renderBookmarks() {
     state.bookmarks.forEach(bm => {
         const chip = document.createElement('div');
         chip.className = 'bookmark-chip';
-        chip.textContent = bm.title || new URL(bm.url).hostname;
+        let label = bm.title || 'Bookmark';
+        try { label = bm.title || new URL(bm.url).hostname; } catch (e) {}
+        chip.textContent = label;
         chip.addEventListener('click', () => {
             elements.urlInput.value = bm.url;
             loadWebsite();
@@ -889,7 +1026,8 @@ function renderBookmarks() {
 
 function addBookmark() {
     if (!state.currentUrl) return;
-    const title = new URL(state.currentUrl).hostname;
+    let title = state.currentUrl;
+    try { title = new URL(state.currentUrl).hostname; } catch (e) {}
     state.bookmarks.push({ url: state.currentUrl, title });
     localStorage.setItem('blazeycc_bookmarks', JSON.stringify(state.bookmarks));
     renderBookmarks();
@@ -912,13 +1050,18 @@ function renderHistory() {
         return;
     }
     elements.historyList.innerHTML = '';
-    state.history.slice().reverse().forEach(rec => {
+    state.history.slice().reverse().forEach((rec, index) => {
         const item = document.createElement('div');
         item.className = 'history-item';
         item.innerHTML = `
             <span class="history-filename">${rec.filename || 'Recording'}</span>
             <span class="history-meta">${rec.preset || 'Custom'} • ${rec.duration || 0}s</span>
         `;
+        item.addEventListener('click', () => {
+            state.lastVideoPath = rec.path;
+            state.lastRecordingDuration = rec.duration;
+            showPreview(rec.path);
+        });
         elements.historyList.appendChild(item);
     });
 }
@@ -1014,13 +1157,18 @@ HASHTAGS: <hashtag1> <hashtag2> <hashtag3> <hashtag4> <hashtag5>`;
 function extractPageData() {
     return new Promise((resolve) => {
         const frame = elements.browserFrame;
+        let title = state.currentUrl;
+        let h1 = '';
         try {
-            const title = frame.contentDocument?.title || state.currentUrl;
-            const h1 = frame.contentDocument?.querySelector('h1')?.innerText?.substring(0, 200) || '';
-            resolve({ title, url: state.currentUrl, h1 });
+            if (frame.contentDocument && frame.contentWindow) {
+                title = frame.contentDocument.title || state.currentUrl;
+                const h1El = frame.contentDocument.querySelector('h1');
+                h1 = h1El ? h1El.innerText.substring(0, 200) : '';
+            }
         } catch (e) {
-            resolve({ title: state.currentUrl, url: state.currentUrl, h1: '' });
+            // Cross-origin iframe — expected
         }
+        resolve({ title, url: state.currentUrl, h1 });
     });
 }
 
@@ -1043,7 +1191,13 @@ function parseAiResponse(text) {
 
 async function startBatchRecording() {
     if (state.batchRecordingInProgress) {
-        showNotification('Batch already running', 'warning');
+        // Cancel running batch
+        state.batchRecordingInProgress = false;
+        state.batchQueue = [];
+        if (state.isRecording) await stopRecording();
+        elements.batchProgress.style.display = 'none';
+        elements.startBatchBtn.textContent = '▶ Start';
+        showNotification('Batch cancelled', 'info');
         return;
     }
 
@@ -1058,15 +1212,19 @@ async function startBatchRecording() {
     state.batchCurrentIndex = 0;
     state.batchRecordingInProgress = true;
     elements.batchProgress.style.display = 'block';
+    elements.startBatchBtn.textContent = '⏹ Cancel';
 
     showNotification(`Starting batch: ${urls.length} URLs`, 'info');
     await processBatchQueue();
 }
 
 async function processBatchQueue() {
+    if (!state.batchRecordingInProgress) return;
+
     if (state.batchCurrentIndex >= state.batchQueue.length) {
         state.batchRecordingInProgress = false;
         elements.batchProgress.style.display = 'none';
+        elements.startBatchBtn.textContent = '▶ Start';
         showNotification('Batch complete!', 'success');
         return;
     }
@@ -1079,8 +1237,13 @@ async function processBatchQueue() {
     loadWebsite();
 
     await new Promise(r => setTimeout(r, 3000));
+    if (!state.batchRecordingInProgress) return;
     await startRecording();
     await new Promise(r => setTimeout(r, item.duration));
+    if (!state.batchRecordingInProgress) {
+        if (state.isRecording) await stopRecording();
+        return;
+    }
     await stopRecording();
     await new Promise(r => setTimeout(r, 2000));
 
@@ -1118,6 +1281,8 @@ function addScheduledRecording() {
     if (!window.scheduleCheckInterval) {
         window.scheduleCheckInterval = setInterval(checkScheduledRecordings, 10000);
     }
+    // Save to localStorage for persistence across app restarts
+    localStorage.setItem('blazeycc_scheduled', JSON.stringify(state.scheduledRecordings));
 }
 
 function renderScheduleList() {
@@ -1125,12 +1290,15 @@ function renderScheduleList() {
         elements.scheduleList.innerHTML = '<p class="empty-message">No schedules</p>';
         return;
     }
-    elements.scheduleList.innerHTML = state.scheduledRecordings.map((s, i) => `
+    elements.scheduleList.innerHTML = state.scheduledRecordings.map((s, i) => {
+        let hostname = s.url;
+        try { hostname = new URL(s.url).hostname; } catch (e) {}
+        return `
         <div class="schedule-item">
-            <span>${new URL(s.url).hostname} — ${new Date(s.time).toLocaleString()}</span>
+            <span>${hostname} — ${new Date(s.time).toLocaleString()}</span>
             <button class="btn btn-small btn-danger" onclick="window.removeSchedule(${i})">✕</button>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 window.removeSchedule = function(index) {
@@ -1138,23 +1306,49 @@ window.removeSchedule = function(index) {
     renderScheduleList();
 };
 
+function loadScheduledRecordings() {
+    const saved = localStorage.getItem('blazeycc_scheduled');
+    if (saved) {
+        try {
+            state.scheduledRecordings = JSON.parse(saved);
+            renderScheduleList();
+            if (state.scheduledRecordings.length > 0 && !window.scheduleCheckInterval) {
+                window.scheduleCheckInterval = setInterval(checkScheduledRecordings, 10000);
+            }
+        } catch (e) {}
+    }
+}
+
 async function checkScheduledRecordings() {
     const now = Date.now();
+    let changed = false;
     for (let i = state.scheduledRecordings.length - 1; i >= 0; i--) {
         const s = state.scheduledRecordings[i];
         if (s.time <= now && !s.started) {
             s.started = true;
+            changed = true;
             showNotification(`Starting scheduled: ${s.url}`, 'info');
             elements.urlInput.value = s.url;
             loadWebsite();
             await new Promise(r => setTimeout(r, 3000));
+            if (state.isRecording) continue;
             await startRecording();
             setTimeout(async () => {
-                await stopRecording();
-                state.scheduledRecordings.splice(i, 1);
-                renderScheduleList();
+                if (state.isRecording) await stopRecording();
             }, s.duration * 1000);
+            // Remove after duration + buffer
+            setTimeout(() => {
+                const idx = state.scheduledRecordings.indexOf(s);
+                if (idx >= 0) {
+                    state.scheduledRecordings.splice(idx, 1);
+                    renderScheduleList();
+                    localStorage.setItem('blazeycc_scheduled', JSON.stringify(state.scheduledRecordings));
+                }
+            }, s.duration * 1000 + 5000);
         }
+    }
+    if (changed) {
+        localStorage.setItem('blazeycc_scheduled', JSON.stringify(state.scheduledRecordings));
     }
 }
 

@@ -76,7 +76,11 @@
                     <div class="placeholder-icon">🌐</div>
                     <p>Enter a URL to start</p>
                 </div>
-                <iframe id="browserFrame" style="display:none;width:100%;height:100%;border:none;"></iframe>
+                <iframe id="browserFrame" style="display:none;width:100%;height:100%;border:none;" loading="eager" referrerpolicy="no-referrer"></iframe>
+                <div id="iframeSpinner" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:var(--bg-secondary);z-index:4;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
+                    <div class="spinner"></div>
+                    <p style="margin-top:1rem;color:var(--text-muted);font-size:0.85rem;">Loading website…</p>
+                </div>
                 <div id="iframeError" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:var(--bg-secondary);z-index:5;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;">
                     <div style="font-size:3rem;margin-bottom:1rem;">⚠️</div>
                     <p style="margin-bottom:1rem;">This site can't be displayed in the embedded browser due to security restrictions.</p>

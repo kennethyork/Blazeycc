@@ -66,20 +66,41 @@ public class ScreenRecorderPlugin extends Plugin {
             return;
         }
 
+        String savedPath = outputPath;
         try {
             mediaRecorder.stop();
+        } catch (RuntimeException e) {
+            // Stop called too quickly after start — no valid data
+            Log.w(TAG, "RuntimeException on stop (no data recorded)", e);
+            // Delete the empty file
+            try { new File(savedPath).delete(); } catch (Exception ignored) {}
+            isRecording = false;
+            cleanupRecorder();
+            call.reject("Recording too short — no data captured. Record for at least 2 seconds.");
+            return;
+        }
+
+        try {
             mediaRecorder.reset();
             virtualDisplay.release();
             mediaProjection.stop();
             isRecording = false;
 
             JSObject result = new JSObject();
-            result.put("path", outputPath);
+            result.put("path", savedPath);
             call.resolve(result);
         } catch (Exception e) {
             Log.e(TAG, "Stop recording failed", e);
+            isRecording = false;
+            cleanupRecorder();
             call.reject(e.getMessage());
         }
+    }
+
+    private void cleanupRecorder() {
+        try { if (virtualDisplay != null) virtualDisplay.release(); } catch (Exception ignored) {}
+        try { if (mediaProjection != null) mediaProjection.stop(); } catch (Exception ignored) {}
+        try { if (mediaRecorder != null) mediaRecorder.reset(); } catch (Exception ignored) {}
     }
 
     @Override
@@ -124,7 +145,8 @@ public class ScreenRecorderPlugin extends Plugin {
 
     private void setupMediaRecorder() throws IOException {
         String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        File dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "Blazeycc");
+        // Use app-private external files dir to avoid scoped storage issues on Android 10+
+        File dir = new File(getContext().getExternalFilesDir(Environment.DIRECTORY_MOVIES), "Blazeycc");
         if (!dir.exists()) dir.mkdirs();
         outputPath = new File(dir, "REC_" + timestamp + ".mp4").getAbsolutePath();
 

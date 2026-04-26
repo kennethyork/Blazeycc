@@ -160,6 +160,21 @@ jobs:
         working-directory: ./mobile
         run: npx cap sync android
 
+      - name: Patch AndroidManifest.xml
+        working-directory: ./mobile/android/app/src/main
+        run: |
+          MANIFEST="AndroidManifest.xml"
+          # Add windowSoftInputMode for keyboard handling
+          sed -i 's|android:launchMode="singleTask"|android:launchMode="singleTask" android:windowSoftInputMode="adjustResize"|g' "$MANIFEST"
+          # Add hardware acceleration
+          sed -i 's|<application|<application android:hardwareAccelerated="true"|g' "$MANIFEST"
+          # Add RECORD_AUDIO permission if missing
+          if ! grep -q "RECORD_AUDIO" "$MANIFEST"; then
+            sed -i 's|</manifest>|<uses-permission android:name="android.permission.RECORD_AUDIO" />\n</manifest>|g' "$MANIFEST"
+          fi
+          # Add usesCleartextTraffic for Ollama HTTP
+          sed -i 's|<application|<application android:usesCleartextTraffic="true"|g' "$MANIFEST"
+
       - name: Generate signing keystore
         working-directory: ./mobile/android/app
         run: |

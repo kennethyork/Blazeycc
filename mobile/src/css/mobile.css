@@ -558,3 +558,17 @@ html[data-theme="light"] {
 
 /* Scrollbar hide */
 ::-webkit-scrollbar { display: none; }
+
+/* Loading spinner */
+.spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Keyboard-open layout fix */
+.keyboard-open .url-section { position: sticky; top: 0; z-index: 20; background: var(--bg-primary); }
+.keyboard-open .browser-wrapper { flex: 1; min-height: 0; }

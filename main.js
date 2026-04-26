@@ -229,7 +229,7 @@ const store = new Store({
         history: [],
         theme: 'dark',
         gpuEncoding: false,
-        frameRate: 5
+        frameRate: 15
     }
 });
 
@@ -780,6 +780,46 @@ ipcMain.handle('select-watermark-image', async () => {
         return { success: true, path: result.filePaths[0] };
     }
     return { success: false };
+});
+
+// Pre-flight validation helpers
+ipcMain.handle('check-ffmpeg', async () => {
+    try {
+        const ffmpegPath = getFfmpegPath();
+        if (!ffmpegPath) return { available: false };
+        // Quick check: run ffmpeg -version
+        const { execSync } = require('child_process');
+        execSync(`"${ffmpegPath}" -version`, { stdio: 'ignore' });
+        return { available: true };
+    } catch (e) {
+        return { available: false };
+    }
+});
+
+ipcMain.handle('get-disk-space', async (event, dirPath) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const checkPath = dirPath || app.getPath('downloads');
+        const stats = fs.statSync(checkPath);
+        // On POSIX systems, use df. On Windows, use wmic.
+        const os = require('os');
+        if (os.platform() === 'win32') {
+            // Windows: get drive letter from path
+            const drive = path.parse(checkPath).root;
+            const { execSync } = require('child_process');
+            const out = execSync(`wmic logicaldisk where "DeviceID='${drive.replace('\\', '')}'" get FreeSpace`, { encoding: 'utf8' });
+            const freeBytes = parseInt(out.replace(/\D/g, ''));
+            return { freeBytes };
+        } else {
+            const { execSync } = require('child_process');
+            const out = execSync(`df -P "${checkPath}" | tail -1 | awk '{print $4}'`, { encoding: 'utf8' });
+            const freeBlocks = parseInt(out.trim());
+            return { freeBytes: freeBlocks * 512 };
+        }
+    } catch (e) {
+        return { freeBytes: null };
+    }
 });
 
 app.whenReady().then(() => {

@@ -115,11 +115,18 @@ npm run build:win     # Windows (exe, portable)
 ### Project Structure
 
 ```
-├── main.js          # Electron main process
-├── app.js           # Renderer logic
-├── index.html       # Main UI
-├── preload.js       # IPC bridge
-└── docs/            # Marketing site (blazeycc.com)
+├── main.js               # Electron main process
+├── js/
+│   ├── state.js          # Shared state, DOM elements, constants
+│   ├── ui.js             # UI helpers, theme, zoom, panels
+│   ├── recording.js      # Recording, canvas capture, audio, trim
+│   ├── annotations.js    # Interactive annotation system
+│   ├── ai.js             # Ollama config & AI metadata generation
+│   ├── features.js       # Batch, scheduled, watermark, fast encoding
+│   └── app.js            # Main init & event wiring
+├── index.html            # Main UI
+├── preload.js            # IPC bridge
+└── docs/                 # Marketing site (blazeycc.com)
 ```
 
 ---

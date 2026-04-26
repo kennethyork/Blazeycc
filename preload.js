@@ -131,5 +131,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // Ollama config
     getOllamaConfig: () => ipcRenderer.invoke('get-ollama-config'),
-    setOllamaConfig: (config) => ipcRenderer.invoke('set-ollama-config', config)
+    setOllamaConfig: (config) => ipcRenderer.invoke('set-ollama-config', config),
+    
+    // Pre-flight validation
+    checkFFmpeg: () => ipcRenderer.invoke('check-ffmpeg'),
+    getDiskSpace: (dirPath) => ipcRenderer.invoke('get-disk-space', dirPath)
 });

@@ -300,9 +300,9 @@
                 <div class="setting-item">
                     <label for="frameRateSelect">Recording Frame Rate</label>
                     <select id="frameRateSelect" class="select-input">
+                        <option value="15" selected>High (15 FPS) — Recommended</option>
                         <option value="5">Cinematic (5 FPS) — Smooth UI, smaller files</option>
                         <option value="10">Smooth (10 FPS) — Balanced</option>
-                        <option value="15">High (15 FPS) — Crisp motion</option>
                         <option value="30">Ultra (30 FPS) — Best with GPU encoding</option>
                     </select>
                     <p class="help-text">Higher FPS = smoother video, but may cause UI lag without GPU encoding.</p>
@@ -365,6 +365,22 @@
                         </div>
                     </details>
                 </div>
+                <div class="setting-item">
+                    <label>🔍 Auto-Zoom on Click (Recording)</label>
+                    <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+                        <input type="checkbox" id="autoZoomToggle" checked>
+                        Enable auto-zoom during recording
+                    </label>
+                    <label for="autoZoomLevel" style="font-size:0.8rem;color:var(--text-muted);">Zoom Level</label>
+                    <input type="range" id="autoZoomLevel" min="1.1" max="3.0" step="0.1" value="1.6" style="width:100%;">
+                    <span id="autoZoomLevelValue" style="font-size:0.8rem;color:var(--text-muted);">1.6x</span>
+                    <label for="autoZoomDuration" style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem;">Zoom Duration (ms)</label>
+                    <input type="range" id="autoZoomDuration" min="500" max="5000" step="100" value="1500" style="width:100%;">
+                    <span id="autoZoomDurationValue" style="font-size:0.8rem;color:var(--text-muted);">1500ms</span>
+                </div>
+                <!-- Hidden trim inputs for backward compatibility -->
+                <input type="hidden" id="trimStart" value="0">
+                <input type="hidden" id="trimEnd" value="0">
             </div>
         </section>
 
@@ -378,22 +394,60 @@
                 <div class="preview-video-container">
                     <video id="previewVideo" controls></video>
                 </div>
-                <div class="preview-trim-controls">
-                    <div class="trim-group">
-                        <label>Trim Start</label>
-                        <input type="number" id="trimStart" value="0" min="0" step="0.1" placeholder="sec">
-                        <span>s</span>
+                <div class="preview-trim-timeline">
+                    <div class="timeline-track">
+                        <div class="timeline-progress" id="timelineProgress"></div>
+                        <div class="timeline-handle timeline-handle-start" id="timelineHandleStart"></div>
+                        <div class="timeline-handle timeline-handle-end" id="timelineHandleEnd"></div>
                     </div>
-                    <div class="trim-group">
-                        <label>Trim End</label>
-                        <input type="number" id="trimEnd" value="0" min="0" step="0.1" placeholder="sec">
-                        <span>s</span>
+                    <div class="timeline-labels">
+                        <span id="timelineStartLabel">0s</span>
+                        <span id="timelineDurationLabel">--</span>
+                        <span id="timelineEndLabel">--</span>
                     </div>
                 </div>
                 <div class="preview-actions">
                     <button id="discardBtn" class="btn btn-danger">🗑️ Discard</button>
                     <button id="savePreviewBtn" class="btn btn-primary">💾 Save Video</button>
                 </div>
+            </div>
+        </section>
+
+        <!-- Onboarding Modal (first launch) -->
+        <section class="onboarding-modal" id="onboardingModal" style="display: none;">
+            <div class="onboarding-content">
+                <div class="onboarding-header">
+                    <h2>Welcome to Blazeycc 🎬</h2>
+                    <p>Record any website as a video in 3 steps</p>
+                </div>
+                <div class="onboarding-steps">
+                    <div class="onboarding-step">
+                        <div class="step-number">1</div>
+                        <div class="step-text">
+                            <strong>Load a website</strong>
+                            <span>Enter any URL and click Load</span>
+                        </div>
+                    </div>
+                    <div class="onboarding-step">
+                        <div class="step-number">2</div>
+                        <div class="step-text">
+                            <strong>Click Record</strong>
+                            <span>Navigate, scroll, or annotate</span>
+                        </div>
+                    </div>
+                    <div class="onboarding-step">
+                        <div class="step-number">3</div>
+                        <div class="step-text">
+                            <strong>Export video</strong>
+                            <span>MP4, WebM, or GIF with one click</span>
+                        </div>
+                    </div>
+                </div>
+                <label class="onboarding-skip">
+                    <input type="checkbox" id="skipOnboarding">
+                    Don't show this again
+                </label>
+                <button id="closeOnboardingBtn" class="btn btn-primary" style="width:100%;">Get Started</button>
             </div>
         </section>
 
@@ -415,7 +469,13 @@
         <div class="notifications" id="notifications"></div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/recording.js"></script>
+    <script src="js/annotations.js"></script>
+    <script src="js/ai.js"></script>
+    <script src="js/features.js"></script>
+    <script src="js/app.js"></script>
     <script>
         // Direct fallback for browse button
         document.addEventListener('DOMContentLoaded', function() {

@@ -192,16 +192,23 @@ function init() {
     elements.settingsBackdrop.addEventListener('click', closeSettings);
     elements.autoZoomToggle.addEventListener('change', (e) => {
         elements.autoZoomOptions.style.display = e.target.checked ? 'block' : 'none';
+        saveSettings();
     });
     elements.autoZoomLevel.addEventListener('input', (e) => {
         elements.autoZoomLevelValue.textContent = e.target.value + 'x';
+        saveSettings();
     });
     elements.autoZoomDuration.addEventListener('input', (e) => {
         elements.autoZoomDurationValue.textContent = e.target.value + 'ms';
+        saveSettings();
     });
     elements.formatPreset.addEventListener('change', () => {
         if (state.websiteLoaded) applyPresetAspectRatio();
+        saveSettings();
     });
+    elements.qualitySetting.addEventListener('change', saveSettings);
+    elements.frameRateSelect.addEventListener('change', saveSettings);
+    elements.ollamaIp.addEventListener('change', saveSettings);
 
     // Annotation
     elements.annotateToggleBtn.addEventListener('click', toggleAnnotations);
@@ -222,6 +229,7 @@ function init() {
     // Theme
     elements.themeToggleBtn.addEventListener('click', toggleTheme);
     loadTheme();
+    loadSettings();
 
     // History
     elements.historyBtn.addEventListener('click', () => togglePanel('history'));
@@ -809,6 +817,45 @@ function loadTheme() {
     state.theme = saved;
     document.documentElement.setAttribute('data-theme', saved);
     elements.themeToggleBtn.textContent = saved === 'dark' ? '🌙' : '☀️';
+}
+
+function saveSettings() {
+    const settings = {
+        formatPreset: elements.formatPreset.value,
+        qualitySetting: elements.qualitySetting.value,
+        frameRateSelect: elements.frameRateSelect.value,
+        autoZoomToggle: elements.autoZoomToggle.checked,
+        autoZoomLevel: elements.autoZoomLevel.value,
+        autoZoomDuration: elements.autoZoomDuration.value,
+        ollamaIp: elements.ollamaIp.value
+    };
+    localStorage.setItem('blazeycc_settings', JSON.stringify(settings));
+}
+
+function loadSettings() {
+    const saved = localStorage.getItem('blazeycc_settings');
+    if (!saved) return;
+    try {
+        const s = JSON.parse(saved);
+        if (s.formatPreset) elements.formatPreset.value = s.formatPreset;
+        if (s.qualitySetting) elements.qualitySetting.value = s.qualitySetting;
+        if (s.frameRateSelect) elements.frameRateSelect.value = s.frameRateSelect;
+        if (typeof s.autoZoomToggle === 'boolean') {
+            elements.autoZoomToggle.checked = s.autoZoomToggle;
+            elements.autoZoomOptions.style.display = s.autoZoomToggle ? 'block' : 'none';
+        }
+        if (s.autoZoomLevel) {
+            elements.autoZoomLevel.value = s.autoZoomLevel;
+            elements.autoZoomLevelValue.textContent = s.autoZoomLevel + 'x';
+        }
+        if (s.autoZoomDuration) {
+            elements.autoZoomDuration.value = s.autoZoomDuration;
+            elements.autoZoomDurationValue.textContent = s.autoZoomDuration + 'ms';
+        }
+        if (s.ollamaIp) elements.ollamaIp.value = s.ollamaIp;
+    } catch (e) {
+        console.error('Failed to load settings', e);
+    }
 }
 
 // =====================

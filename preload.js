@@ -32,34 +32,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getTheme: () => ipcRenderer.invoke('get-theme'),
     setTheme: (theme) => ipcRenderer.invoke('set-theme', theme),
     
-    // License
-    getLicense: () => ipcRenderer.invoke('get-license'),
-    setLicense: (email, key, tier) => ipcRenderer.invoke('set-license', { email, key, tier }),
-    validateLicense: (email, key) => ipcRenderer.invoke('validate-license', { email, key }),
-    clearLicense: () => ipcRenderer.invoke('clear-license'),
-    isProLicensed: () => ipcRenderer.invoke('is-pro-licensed'),
-    isProPlusLicensed: () => ipcRenderer.invoke('is-pro-plus-licensed'),
-    getLicenseTier: () => ipcRenderer.invoke('get-license-tier'),
-    redeemPromo: (email, code) => ipcRenderer.invoke('redeem-promo', { email, code }),
-    trackUsage: (action, metadata) => ipcRenderer.invoke('track-usage', { action, metadata }),
-    createStripeCheckout: (email, tier) => ipcRenderer.invoke('create-stripe-checkout', { email, tier }),
-    openStripePortal: (email) => ipcRenderer.invoke('open-stripe-portal', { email }),
-    
-    // Batch recordings (Pro)
+    // Batch recordings
     getBatchUrls: () => ipcRenderer.invoke('get-batch-urls'),
     setBatchUrls: (urls) => ipcRenderer.invoke('set-batch-urls', urls),
     
-    // Scheduled recordings (Pro)
+    // Scheduled recordings
     getScheduledRecordings: () => ipcRenderer.invoke('get-scheduled-recordings'),
     addScheduledRecording: (schedule) => ipcRenderer.invoke('add-scheduled-recording', schedule),
     removeScheduledRecording: (id) => ipcRenderer.invoke('remove-scheduled-recording', id),
     
-    // Custom watermark (Pro)
+    // Custom watermark
     getCustomWatermark: () => ipcRenderer.invoke('get-custom-watermark'),
     setCustomWatermark: (settings) => ipcRenderer.invoke('set-custom-watermark', settings),
     selectWatermarkImage: () => ipcRenderer.invoke('select-watermark-image'),
     
-    // Fast encoding (Pro)
+    // Fast encoding
     getFastEncode: () => ipcRenderer.invoke('get-fast-encode'),
     setFastEncode: (enabled) => ipcRenderer.invoke('set-fast-encode', enabled),
     

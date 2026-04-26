@@ -104,34 +104,6 @@ async function detectGpuEncoder() {
     return detectedGpuEncoder;
 }
 
-// License API configuration
-// Get watermark logo path
-function getWatermarkLogoPath() {
-    if (app.isPackaged) {
-        const logoPath = path.join(process.resourcesPath, 'watermark.png');
-        if (fs.existsSync(logoPath)) {
-            return logoPath;
-        }
-    }
-    // Dev mode - use local file
-    const devPath = path.join(__dirname, 'watermark.png');
-    if (fs.existsSync(devPath)) {
-        return devPath;
-    }
-    return null;
-}
-
-// Get watermark position coordinates
-function getWatermarkPosition(position) {
-    const positions = {
-        'bottom-left': { x: '10', y: 'h-35' },
-        'bottom-right': { x: 'w-tw-10', y: 'h-35' },
-        'top-left': { x: '10', y: '10' },
-        'top-right': { x: 'w-tw-10', y: '10' }
-    };
-    return positions[position] || positions['bottom-left'];
-}
-
 // Get ffmpeg path - handle both dev and packaged scenarios
 function getFFmpegPath() {
     let ffmpegPath;
@@ -304,15 +276,9 @@ ipcMain.handle('get-webview-source', async (event, webviewId) => {
 
 // Save video file (with MP4/GIF conversion and resize)
 ipcMain.handle('save-video', async (event, { filename, data, format, quality, width, height, proSettings }) => {
-    // Check if Pro licensed
-    const license = store.get('license', null);
-    const isProLicensed = license && license.email && license.key && validateLicenseKey(license.email, license.key);
-    
-    // Pro settings defaults
     const settings = proSettings || {};
-    const useFastEncode = isProLicensed && settings.fastEncode;
-    const customWatermark = isProLicensed && settings.customWatermark;
-    const shouldAddWatermark = !isProLicensed; // Free users get default watermark
+    const useFastEncode = settings.fastEncode;
+    const customWatermark = settings.customWatermark;
     
     try {
         const savePath = store.get('savePath');
@@ -393,10 +359,10 @@ ipcMain.handle('save-video', async (event, { filename, data, format, quality, wi
                     filters += `,scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`;
                 }
                 
-                // Add watermark for free users (before palette generation)
-                if (shouldAddWatermark) {
-                    // Text watermark - semi-transparent in bottom-left corner
-                    filters += `,drawtext=text='Blazeycc':fontsize=24:fontcolor=white@0.5:x=10:y=h-35:shadowcolor=black@0.3:shadowx=1:shadowy=1`;
+                // Custom watermark (if configured)
+                if (customWatermark && customWatermark.type === 'text' && customWatermark.text) {
+                    const pos = { 'bottom-left': 'x=10:y=h-35', 'bottom-right': 'x=w-tw-10:y=h-35', 'top-left': 'x=10:y=10', 'top-right': 'x=w-tw-10:y=10' }[customWatermark.position || 'bottom-left'];
+                    filters += `,drawtext=text='${customWatermark.text.replace(/'/g, "\\'").replace(/:/g, "\\:")}':fontsize=20:fontcolor=white@0.7:${pos}:shadowcolor=black@0.3:shadowx=1:shadowy=1`;
                 }
                 
                 filters += ',split[s0][s1];[s0]palettegen=max_colors=256:stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5';
@@ -417,12 +383,10 @@ ipcMain.handle('save-video', async (event, { filename, data, format, quality, wi
                     vfFilters.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`);
                 }
                 
-                // Add watermark
-                if (shouldAddWatermark) {
-                    vfFilters.push(`drawtext=text='Blazeycc':fontsize=24:fontcolor=white@0.5:x=10:y=h-35:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
-                } else if (customWatermark && customWatermark.type === 'text' && customWatermark.text) {
-                    const pos = getWatermarkPosition(customWatermark.position || 'bottom-left');
-                    vfFilters.push(`drawtext=text='${customWatermark.text.replace(/'/g, "\\'").replace(/:/g, "\\:")}':fontsize=20:fontcolor=white@0.7:x=${pos.x}:y=${pos.y}:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
+                // Custom watermark (if configured)
+                if (customWatermark && customWatermark.type === 'text' && customWatermark.text) {
+                    const pos = { 'bottom-left': 'x=10:y=h-35', 'bottom-right': 'x=w-tw-10:y=h-35', 'top-left': 'x=10:y=10', 'top-right': 'x=w-tw-10:y=10' }[customWatermark.position || 'bottom-left'];
+                    vfFilters.push(`drawtext=text='${customWatermark.text.replace(/'/g, "\\'").replace(/:/g, "\\:")}':fontsize=20:fontcolor=white@0.7:${pos}:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
                 }
                 
                 if (vfFilters.length > 0) {
@@ -447,12 +411,10 @@ ipcMain.handle('save-video', async (event, { filename, data, format, quality, wi
                     vfFilters.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`);
                 }
                 
-                // Add watermark
-                if (shouldAddWatermark) {
-                    vfFilters.push(`drawtext=text='Blazeycc':fontsize=24:fontcolor=white@0.5:x=10:y=h-35:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
-                } else if (customWatermark && customWatermark.type === 'text' && customWatermark.text) {
-                    const pos = getWatermarkPosition(customWatermark.position || 'bottom-left');
-                    vfFilters.push(`drawtext=text='${customWatermark.text.replace(/'/g, "\\'").replace(/:/g, "\\:")}':fontsize=20:fontcolor=white@0.7:x=${pos.x}:y=${pos.y}:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
+                // Custom watermark (if configured)
+                if (customWatermark && customWatermark.type === 'text' && customWatermark.text) {
+                    const pos = { 'bottom-left': 'x=10:y=h-35', 'bottom-right': 'x=w-tw-10:y=h-35', 'top-left': 'x=10:y=10', 'top-right': 'x=w-tw-10:y=10' }[customWatermark.position || 'bottom-left'];
+                    vfFilters.push(`drawtext=text='${customWatermark.text.replace(/'/g, "\\'").replace(/:/g, "\\:")}':fontsize=20:fontcolor=white@0.7:${pos}:shadowcolor=black@0.3:shadowx=1:shadowy=1`);
                 }
                 
                 if (vfFilters.length > 0) {
@@ -476,9 +438,6 @@ ipcMain.handle('save-video', async (event, { filename, data, format, quality, wi
                     if (mainWindow && !mainWindow.isDestroyed()) {
                         mainWindow.webContents.send('ffmpeg-progress', { percent: 100, done: true });
                     }
-                    
-                    // Track video creation
-                    trackUsage('video_created', { format, quality, isProLicensed });
                     
                     resolve({ success: true, path: outputPath });
                 })
@@ -643,57 +602,6 @@ ipcMain.handle('get-frame-rate', async () => {
 ipcMain.handle('set-frame-rate', async (event, fps) => {
     store.set('frameRate', fps);
     return fps;
-});
-
-// License management - all features are free, no external validation
-function validateLicenseKey(email, key) {
-    // All features are free - always return true
-    return true;
-}
-
-ipcMain.handle('get-license', async () => {
-    return { email: null, key: null, isValid: false };
-});
-
-ipcMain.handle('set-license', async () => {
-    return { success: true, message: 'All features are free!' };
-});
-
-ipcMain.handle('validate-license', async () => {
-    return true;
-});
-
-ipcMain.handle('clear-license', async () => {
-    store.delete('license');
-    return { success: true };
-});
-
-ipcMain.handle('redeem-promo', async () => {
-    return { success: true, message: 'All features are free!' };
-});
-
-ipcMain.handle('create-stripe-checkout', async () => {
-    return { error: 'All features are free!' };
-});
-
-ipcMain.handle('open-stripe-portal', async () => {
-    return { error: 'All features are free!' };
-});
-
-ipcMain.handle('track-usage', async () => {
-    return { success: true };
-});
-
-ipcMain.handle('is-pro-licensed', async () => {
-    return true;
-});
-
-ipcMain.handle('is-pro-plus-licensed', async () => {
-    return true;
-});
-
-ipcMain.handle('get-license-tier', async () => {
-    return 'pro';
 });
 
 // Scheduled recordings storage
@@ -1135,18 +1043,8 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
         const outputFormat = format || 'mp4';
         const outputPath = path.join(savePath, `blazeycc_${timestamp}.${outputFormat}`);
         
-        // Check Pro license
-        const license = store.get('license', null);
-        const isProLicensed = license && license.email && license.key && validateLicenseKey(license.email, license.key);
         const settings = proSettings || {};
-        const useFastEncode = isProLicensed && settings.fastEncode;
-        const shouldAddWatermark = !isProLicensed; // Free users get watermark
-        
-        // Get watermark image path
-        const watermarkPath = getWatermarkLogoPath();
-        const hasWatermark = shouldAddWatermark && watermarkPath && fs.existsSync(watermarkPath);
-        
-        console.log('Watermark check:', { isProLicensed, shouldAddWatermark, hasWatermark, watermarkPath });
+        const useFastEncode = settings.fastEncode;
         
         // Build FFmpeg command
         const inputPattern = path.join(tempDir, 'frame_%06d.png');
@@ -1187,11 +1085,6 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                 }
             }
             
-            // Add watermark input if needed
-            if (hasWatermark) {
-                command = command.input(watermarkPath);
-            }
-
             // Add webcam input if needed
             const webcamPath = settings.webcamPath;
             const hasWebcam = webcamPath && fs.existsSync(webcamPath);
@@ -1199,48 +1092,16 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                 command = command.input(webcamPath);
             }
 
-            // Build complex filter for resize + watermark + motion blur + webcam
-            // Input indices: 0=frames, 1=audio?, 2=watermark?, 3=webcam?
+            // Build complex filter for resize + motion blur + webcam
+            // Input indices: 0=frames, 1=audio?, 2=webcam?
             let nextInputIdx = 1;
             if (hasAudio) nextInputIdx++;
-            const watermarkInputIdx = hasWatermark ? nextInputIdx++ : null;
             const webcamInputIdx = hasWebcam ? nextInputIdx++ : null;
 
             const useMotionBlur = settings.motionBlur;
             const motionBlurFilter = useMotionBlur ? 'tmix=frames=3:weights=\'1 2 1\'' : '';
 
-            // Build filter chain
-            let filterChain = [];
-            let lastLabel = '0:v';
-
-            // Step 1: Scale + motion blur
-            if (width && height) {
-                let f = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`;
-                if (motionBlurFilter) f += `,${motionBlurFilter}`;
-                filterChain.push(`[0:v]${f}[v1]`);
-                lastLabel = '[v1]';
-            } else if (motionBlurFilter) {
-                filterChain.push(`[0:v]${motionBlurFilter}[v1]`);
-                lastLabel = '[v1]';
-            }
-
-            // Step 2: Watermark overlay (bottom-left)
-            if (hasWatermark) {
-                const input = lastLabel === '[v1]' ? '[v1]' : '[0:v]';
-                filterChain.push(`${input}[${watermarkInputIdx}:v]overlay=10:H-h-10[v2]`);
-                lastLabel = '[v2]';
-            }
-
-            // Step 3: Webcam overlay (bottom-right, 120x90 scaled)
-            if (hasWebcam) {
-                const input = lastLabel;
-                const webcamScale = width && height ? Math.min(width / 8, 160) : 160;
-                filterChain.push(`${input}[${webcamInputIdx}:v]scale=${webcamScale}:-1,format=yuva420p[wc];${input}[wc]overlay=W-w-10:H-h-10:format=auto[v3]`);
-                // The above doesn't work well with chain; let me simplify
-            }
-
-            // Simplified approach: build all at once
-            if (hasWatermark || hasWebcam || (width && height) || motionBlurFilter) {
+            if (hasWebcam || (width && height) || motionBlurFilter) {
                 let mainFilter = '';
                 if (width && height) {
                     mainFilter += `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`;
@@ -1255,11 +1116,6 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
                 }
 
                 let current = mainFilter ? '[base]' : '[0:v]';
-
-                if (hasWatermark) {
-                    overlays.push(`${current}[${watermarkInputIdx}:v]overlay=10:H-h-10[wmark]`);
-                    current = '[wmark]';
-                }
 
                 if (hasWebcam) {
                     const wcScale = width && height ? Math.min(Math.round(width / 6), 200) : 200;

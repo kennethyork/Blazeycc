@@ -357,9 +357,4 @@ async function loadLicense() {
 function unlockProFeatures() {}
 function unlockProPlusFeatures() {}
 function lockProPlusFeatures() {}
-function lockProFeatures() {}
-async function activateLicense() {}
-async function deactivateLicense() {}
-async function redeemPromoCode() {}
-async function openStripeCheckout() {}
 function isProEnabled() { return true; }

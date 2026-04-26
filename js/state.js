@@ -183,7 +183,4 @@ const state = {
     lastRecordingDuration: 0
 };
 
-// License — all features free
-const isProLicensed = true;
-const isProPlusLicensed = true;
-const licenseTier = 'pro+';
+

@@ -12,7 +12,7 @@ on:
         default: ''
 
 jobs:
-  build-linux:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -21,7 +21,29 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: xvfb-run npx playwright test
+
+  build-linux:
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -40,6 +62,7 @@ jobs:
             dist/*.rpm
 
   build-windows:
+    needs: [test]
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -48,7 +71,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Cache node_modules
@@ -72,6 +95,7 @@ jobs:
           path: dist/*.exe
 
   build-mac:
+    needs: [test]
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -80,7 +104,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -98,6 +122,7 @@ jobs:
             dist/*.zip
 
   build-android:
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -106,7 +131,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Java 17

@@ -160,6 +160,12 @@ async function startRecording() {
             startAutoScroll();
         }
 
+        // Start webcam bubble if enabled
+        const webcamToggle = document.getElementById('webcamToggle');
+        if (webcamToggle?.checked) {
+            await startWebcamCapture();
+        }
+
         injectCursorHighlight();
         injectAutoZoom();
         setWebviewRecordingState(true);
@@ -216,6 +222,15 @@ async function stopRecording() {
             if (trimStart > 0) settings.proSettings.trimStart = trimStart;
             if (trimEnd > 0) settings.proSettings.trimEnd = trimEnd;
 
+            const motionBlurToggle = document.getElementById('motionBlurToggle');
+            if (motionBlurToggle?.checked) settings.proSettings.motionBlur = true;
+
+            // Stop webcam and save blob
+            if (state.webcamRecorder) {
+                const webcamPath = await stopWebcamCapture();
+                if (webcamPath) settings.proSettings.webcamPath = webcamPath;
+            }
+
             const result = await window.electronAPI.stopCanvasRecording(
                 settings.format,
                 settings.quality,
@@ -244,6 +259,11 @@ async function stopRecording() {
                     timestamp: new Date().toISOString()
                 });
                 loadHistory();
+
+                // Show preview modal with trimmer
+                state.lastRecordingPath = result.filePath;
+                state.lastRecordingDuration = duration;
+                showPreviewModalWithTrimmer(result.filePath, duration);
             } else {
                 throw new Error(result.error || 'Failed to save video');
             }
@@ -673,4 +693,248 @@ async function stopAudioCapture() {
         showNotification('Audio save failed: ' + error.message, 'error');
     }
     return null;
+}
+
+// =====================
+// PREVIEW MODAL & TRIMMER
+// =====================
+
+function showPreviewModalWithTrimmer(filePath, duration) {
+    const video = elements.previewVideo;
+    video.src = 'file://' + filePath;
+    elements.previewModal.style.display = 'flex';
+
+    // Reset trim values
+    document.getElementById('trimStart').value = 0;
+    document.getElementById('trimEnd').value = 0;
+
+    video.onloadedmetadata = () => {
+        const dur = video.duration || duration;
+        initTimelineTrimmer(dur);
+    };
+
+    // Show apply-trim button if not already there
+    let applyTrimBtn = document.getElementById('applyTrimBtn');
+    if (!applyTrimBtn) {
+        applyTrimBtn = document.createElement('button');
+        applyTrimBtn.id = 'applyTrimBtn';
+        applyTrimBtn.className = 'btn btn-primary';
+        applyTrimBtn.textContent = '✂️ Apply Trim & Re-encode';
+        applyTrimBtn.style.display = 'none';
+        applyTrimBtn.addEventListener('click', applyTrimToLastRecording);
+        elements.savePreviewBtn.parentNode.insertBefore(applyTrimBtn, elements.savePreviewBtn);
+    }
+    applyTrimBtn.style.display = 'none';
+}
+
+elements.closePreviewBtn?.addEventListener('click', closePreviewModal);
+elements.discardBtn?.addEventListener('click', discardRecording);
+elements.savePreviewBtn?.addEventListener('click', closePreviewModal);
+
+function closePreviewModal() {
+    elements.previewModal.style.display = 'none';
+    elements.previewVideo.pause();
+    elements.previewVideo.src = '';
+}
+
+function discardRecording() {
+    closePreviewModal();
+    if (state.lastRecordingPath) {
+        window.electronAPI.deleteHistoryItem(state.lastRecordingPath).catch(() => {});
+    }
+    state.lastRecordingPath = null;
+    showNotification('Recording discarded', 'info');
+}
+
+async function applyTrimToLastRecording() {
+    if (!state.lastRecordingPath) return;
+    const trimStart = parseFloat(document.getElementById('trimStart')?.value) || 0;
+    const trimEnd = parseFloat(document.getElementById('trimEnd')?.value) || 0;
+    if (trimStart <= 0 && trimEnd <= 0) {
+        showNotification('No trim values set', 'info');
+        return;
+    }
+    elements.statusText.textContent = 'Applying trim...';
+    showProgressModal();
+    try {
+        const result = await window.electronAPI.trimVideo(state.lastRecordingPath, trimStart, trimEnd);
+        if (result.success) {
+            showNotification('Trim applied: ' + result.path, 'success');
+            state.lastRecordingPath = result.path;
+            elements.previewVideo.src = 'file://' + result.path;
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        showNotification('Trim failed: ' + error.message, 'error');
+    } finally {
+        hideProgressModal();
+        elements.statusText.textContent = 'Ready';
+    }
+}
+
+// Timeline trimmer with draggable handles
+let timelineState = { duration: 0, start: 0, end: 0, dragging: null };
+
+function initTimelineTrimmer(duration) {
+    timelineState.duration = duration;
+    timelineState.start = 0;
+    timelineState.end = duration;
+
+    const track = elements.timelineTrack;
+    const handleStart = elements.timelineHandleStart;
+    const handleEnd = elements.timelineHandleEnd;
+    const progress = elements.timelineProgress;
+
+    if (!track || !handleStart || !handleEnd) return;
+
+    updateTimelineUI();
+
+    function getPctFromEvent(e) {
+        const rect = track.getBoundingClientRect();
+        const x = (e.clientX || e.touches?.[0]?.clientX) - rect.left;
+        return Math.max(0, Math.min(1, x / rect.width));
+    }
+
+    function onMove(e) {
+        e.preventDefault();
+        const pct = getPctFromEvent(e);
+        const time = pct * timelineState.duration;
+
+        if (timelineState.dragging === 'start') {
+            timelineState.start = Math.min(time, timelineState.end - 1);
+        } else if (timelineState.dragging === 'end') {
+            timelineState.end = Math.max(time, timelineState.start + 1);
+        }
+        updateTimelineUI();
+    }
+
+    function onUp() {
+        timelineState.dragging = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+    }
+
+    handleStart.addEventListener('mousedown', (e) => { timelineState.dragging = 'start'; document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp); });
+    handleStart.addEventListener('touchstart', (e) => { timelineState.dragging = 'start'; document.addEventListener('touchmove', onMove); document.addEventListener('touchend', onUp); });
+    handleEnd.addEventListener('mousedown', (e) => { timelineState.dragging = 'end'; document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp); });
+    handleEnd.addEventListener('touchstart', (e) => { timelineState.dragging = 'end'; document.addEventListener('touchmove', onMove); document.addEventListener('touchend', onUp); });
+
+    // Click on track to seek video
+    track.addEventListener('click', (e) => {
+        if (timelineState.dragging) return;
+        const rect = track.getBoundingClientRect();
+        const pct = (e.clientX - rect.left) / rect.width;
+        elements.previewVideo.currentTime = pct * timelineState.duration;
+    });
+}
+
+function updateTimelineUI() {
+    const handleStart = elements.timelineHandleStart;
+    const handleEnd = elements.timelineHandleEnd;
+    const progress = elements.timelineProgress;
+    const startPct = (timelineState.start / timelineState.duration) * 100;
+    const endPct = (timelineState.end / timelineState.duration) * 100;
+
+    if (handleStart) handleStart.style.left = startPct + '%';
+    if (handleEnd) handleEnd.style.left = endPct + '%';
+    if (progress) {
+        progress.style.left = startPct + '%';
+        progress.style.width = (endPct - startPct) + '%';
+    }
+
+    if (elements.timelineStartLabel) elements.timelineStartLabel.textContent = formatTime(timelineState.start);
+    if (elements.timelineEndLabel) elements.timelineEndLabel.textContent = formatTime(timelineState.end);
+    if (elements.timelineDurationLabel) elements.timelineDurationLabel.textContent = formatTime(timelineState.end - timelineState.start);
+
+    // Sync hidden inputs
+    document.getElementById('trimStart').value = timelineState.start;
+    document.getElementById('trimEnd').value = Math.max(0, timelineState.duration - timelineState.end);
+
+    // Show apply-trim button if trim is set
+    const applyTrimBtn = document.getElementById('applyTrimBtn');
+    if (applyTrimBtn) {
+        const hasTrim = timelineState.start > 0.5 || (timelineState.duration - timelineState.end) > 0.5;
+        applyTrimBtn.style.display = hasTrim ? 'inline-block' : 'none';
+    }
+}
+
+function formatTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    const ms = Math.floor((sec % 1) * 10);
+    return `${m}:${s.toString().padStart(2, '0')}.${ms}`;
+}
+
+// =====================
+// WEBCAM BUBBLE CAPTURE
+// =====================
+
+async function startWebcamCapture() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: false });
+        const videoEl = document.getElementById('webcamVideo');
+        const previewEl = document.getElementById('webcamPreview');
+        if (videoEl) videoEl.srcObject = stream;
+        if (previewEl) previewEl.style.display = 'block';
+
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+            ? 'video/webm;codecs=vp9'
+            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+                ? 'video/webm;codecs=vp8'
+                : 'video/webm';
+
+        const recorder = new MediaRecorder(stream, { mimeType });
+        state.webcamChunks = [];
+        recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) state.webcamChunks.push(e.data);
+        };
+        recorder.start(1000);
+        state.webcamRecorder = recorder;
+        state.webcamStream = stream;
+        console.log('Webcam recording started');
+    } catch (error) {
+        console.error('Webcam capture failed:', error);
+        showNotification('Webcam failed: ' + error.message, 'error');
+    }
+}
+
+async function stopWebcamCapture() {
+    if (!state.webcamRecorder) return null;
+    try {
+        return new Promise((resolve) => {
+            state.webcamRecorder.onstop = async () => {
+                const blob = new Blob(state.webcamChunks, { type: 'video/webm' });
+                state.webcamStream?.getTracks().forEach(t => t.stop());
+                state.webcamRecorder = null;
+                state.webcamStream = null;
+                const previewEl = document.getElementById('webcamPreview');
+                if (previewEl) previewEl.style.display = 'none';
+
+                if (blob.size === 0) {
+                    resolve(null);
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64 = reader.result.split(',')[1];
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                    const result = await window.electronAPI.saveWebcamBlob(base64, `webcam-${timestamp}.webm`);
+                    if (result.success) {
+                        resolve(result.path);
+                    } else {
+                        resolve(null);
+                    }
+                };
+                reader.readAsDataURL(blob);
+            };
+            state.webcamRecorder.stop();
+        });
+    } catch (error) {
+        console.error('Failed to stop webcam capture:', error);
+        return null;
+    }
 }

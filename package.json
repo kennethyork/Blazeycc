@@ -1,12 +1,14 @@
 {
   "name": "blazeycc",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Record any website as video",
   "main": "main.js",
   "scripts": {
     "start": "electron . --no-sandbox --disable-gpu --disable-software-rasterizer --disable-gpu-compositing",
     "start:gpu": "electron . --enable-gpu",
     "dev": "npx serve .",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
     "build": "electron-builder",
     "build:linux": "electron-builder --linux",
     "build:win": "electron-builder --win",
@@ -27,6 +29,7 @@
   },
   "license": "GPL-3.0",
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "electron": "^40.6.1",
     "electron-builder": "^26.8.1"
   },

@@ -1195,27 +1195,85 @@ ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, 
             if (hasWatermark) {
                 command = command.input(watermarkPath);
             }
-            
-            // Build complex filter for resize + watermark
-            // Note: input indices shift when audio is added
-            const watermarkInputIdx = hasAudio ? 2 : 1;
-            
-            if (hasWatermark && width && height) {
-                // Both resize and watermark
-                command = command.complexFilter([
-                    `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2[scaled]`,
-                    `[scaled][${watermarkInputIdx}:v]overlay=10:H-h-10[out]`
-                ], 'out');
-            } else if (hasWatermark) {
-                // Watermark only (bottom-left corner)
-                command = command.complexFilter([
-                    `[0:v][${watermarkInputIdx}:v]overlay=10:H-h-10[out]`
-                ], 'out');
-            } else if (width && height) {
-                // Resize only
-                command = command.videoFilters([
-                    `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`
-                ]);
+
+            // Add webcam input if needed
+            const webcamPath = settings.webcamPath;
+            const hasWebcam = webcamPath && fs.existsSync(webcamPath);
+            if (hasWebcam) {
+                command = command.input(webcamPath);
+            }
+
+            // Build complex filter for resize + watermark + motion blur + webcam
+            // Input indices: 0=frames, 1=audio?, 2=watermark?, 3=webcam?
+            let nextInputIdx = 1;
+            if (hasAudio) nextInputIdx++;
+            const watermarkInputIdx = hasWatermark ? nextInputIdx++ : null;
+            const webcamInputIdx = hasWebcam ? nextInputIdx++ : null;
+
+            const useMotionBlur = settings.motionBlur;
+            const motionBlurFilter = useMotionBlur ? 'tmix=frames=3:weights=\'1 2 1\'' : '';
+
+            // Build filter chain
+            let filterChain = [];
+            let lastLabel = '0:v';
+
+            // Step 1: Scale + motion blur
+            if (width && height) {
+                let f = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`;
+                if (motionBlurFilter) f += `,${motionBlurFilter}`;
+                filterChain.push(`[0:v]${f}[v1]`);
+                lastLabel = '[v1]';
+            } else if (motionBlurFilter) {
+                filterChain.push(`[0:v]${motionBlurFilter}[v1]`);
+                lastLabel = '[v1]';
+            }
+
+            // Step 2: Watermark overlay (bottom-left)
+            if (hasWatermark) {
+                const input = lastLabel === '[v1]' ? '[v1]' : '[0:v]';
+                filterChain.push(`${input}[${watermarkInputIdx}:v]overlay=10:H-h-10[v2]`);
+                lastLabel = '[v2]';
+            }
+
+            // Step 3: Webcam overlay (bottom-right, 120x90 scaled)
+            if (hasWebcam) {
+                const input = lastLabel;
+                const webcamScale = width && height ? Math.min(width / 8, 160) : 160;
+                filterChain.push(`${input}[${webcamInputIdx}:v]scale=${webcamScale}:-1,format=yuva420p[wc];${input}[wc]overlay=W-w-10:H-h-10:format=auto[v3]`);
+                // The above doesn't work well with chain; let me simplify
+            }
+
+            // Simplified approach: build all at once
+            if (hasWatermark || hasWebcam || (width && height) || motionBlurFilter) {
+                let mainFilter = '';
+                if (width && height) {
+                    mainFilter += `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`;
+                }
+                if (motionBlurFilter) {
+                    mainFilter += (mainFilter ? ',' : '') + motionBlurFilter;
+                }
+
+                let overlays = [];
+                if (mainFilter) {
+                    overlays.push(`[0:v]${mainFilter}[base]`);
+                }
+
+                let current = mainFilter ? '[base]' : '[0:v]';
+
+                if (hasWatermark) {
+                    overlays.push(`${current}[${watermarkInputIdx}:v]overlay=10:H-h-10[wmark]`);
+                    current = '[wmark]';
+                }
+
+                if (hasWebcam) {
+                    const wcScale = width && height ? Math.min(Math.round(width / 6), 200) : 200;
+                    overlays.push(`${current}[${webcamInputIdx}:v]scale=${wcScale}:-2[wc];${current}[wc]overlay=W-w-10:H-h-10[final]`);
+                    current = '[final]';
+                }
+
+                if (overlays.length > 0) {
+                    command = command.complexFilter(overlays, current.replace(/[\[\]]/g, ''));
+                }
             }
             
             // Output format settings
@@ -1402,6 +1460,62 @@ ipcMain.handle('cancel-canvas-recording', async () => {
     }
     canvasRecordingSession = null;
     return { success: true };
+});
+
+// Trim an existing video file with FFmpeg
+ipcMain.handle('trim-video', async (event, { filePath, trimStart, trimEnd }) => {
+    try {
+        const ffmpegPath = getFfmpegPath();
+        const path = require('path');
+        const ext = path.extname(filePath);
+        const base = path.basename(filePath, ext);
+        const dir = path.dirname(filePath);
+        const outputPath = path.join(dir, `${base}-trimmed${ext}`);
+
+        return new Promise((resolve, reject) => {
+            let command = ffmpeg(filePath)
+                .setFfmpegPath(ffmpegPath);
+
+            if (trimStart > 0) {
+                command = command.seekInput(trimStart);
+            }
+            if (trimEnd > 0) {
+                command = command.duration(trimEnd);
+            }
+
+            command
+                .output(outputPath)
+                .outputOptions(['-c:v libx264', '-preset fast', '-crf 22', '-c:a aac', '-b:a 128k', '-movflags +faststart'])
+                .on('start', (cmd) => console.log('Trim command:', cmd))
+                .on('progress', (progress) => {
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('ffmpeg-progress', { percent: Math.round(progress.percent || 0), done: false });
+                    }
+                })
+                .on('end', () => {
+                    resolve({ success: true, path: outputPath });
+                })
+                .on('error', (err) => {
+                    reject(new Error(err.message));
+                })
+                .run();
+        });
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// Save webcam blob to file for FFmpeg overlay
+ipcMain.handle('save-webcam-blob', async (event, { base64, filename }) => {
+    try {
+        const savePath = store.get('savePath', path.join(os.homedir(), 'Downloads'));
+        const filePath = path.join(savePath, filename);
+        const buffer = Buffer.from(base64, 'base64');
+        fs.writeFileSync(filePath, buffer);
+        return { success: true, path: filePath };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
 });
 
 process.on('uncaughtException', (error) => {

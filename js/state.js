@@ -87,6 +87,14 @@ const elements = {
     onboardingModal: document.getElementById('onboardingModal'),
     closeOnboardingBtn: document.getElementById('closeOnboardingBtn'),
     skipOnboarding: document.getElementById('skipOnboarding'),
+    // Timeline trim
+    timelineTrack: document.getElementById('timelineTrack'),
+    timelineProgress: document.getElementById('timelineProgress'),
+    timelineHandleStart: document.getElementById('timelineHandleStart'),
+    timelineHandleEnd: document.getElementById('timelineHandleEnd'),
+    timelineStartLabel: document.getElementById('timelineStartLabel'),
+    timelineEndLabel: document.getElementById('timelineEndLabel'),
+    timelineDurationLabel: document.getElementById('timelineDurationLabel'),
     // Annotation elements
     annotationToolbar: document.getElementById('annotationToolbar'),
     annotationTools: document.getElementById('annotationTools'),
@@ -166,7 +174,13 @@ const state = {
     annotationEnabled: false,
     annotationTool: 'select',
     zoomLevel: 0,
-    ollamaConfig: { endpoint: 'http://localhost:11434', model: 'llama3.2' }
+    ollamaConfig: { endpoint: 'http://localhost:11434', model: 'llama3.2' },
+    // Webcam capture
+    webcamRecorder: null,
+    webcamStream: null,
+    webcamChunks: [],
+    lastRecordingPath: null,
+    lastRecordingDuration: 0
 };
 
 // License — all features free

@@ -135,5 +135,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     
     // Pre-flight validation
     checkFFmpeg: () => ipcRenderer.invoke('check-ffmpeg'),
-    getDiskSpace: (dirPath) => ipcRenderer.invoke('get-disk-space', dirPath)
+    getDiskSpace: (dirPath) => ipcRenderer.invoke('get-disk-space', dirPath),
+    
+    // Trim existing video
+    trimVideo: (filePath, trimStart, trimEnd) => ipcRenderer.invoke('trim-video', { filePath, trimStart, trimEnd }),
+    
+    // Webcam blob save
+    saveWebcamBlob: (base64, filename) => ipcRenderer.invoke('save-webcam-blob', { base64, filename })
 });

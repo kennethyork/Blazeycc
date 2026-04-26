@@ -141,5 +141,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     trimVideo: (filePath, trimStart, trimEnd) => ipcRenderer.invoke('trim-video', { filePath, trimStart, trimEnd }),
     
     // Webcam blob save
-    saveWebcamBlob: (base64, filename) => ipcRenderer.invoke('save-webcam-blob', { base64, filename })
+    saveWebcamBlob: (base64, filename) => ipcRenderer.invoke('save-webcam-blob', { base64, filename }),
+    
+    // AI captioning
+    generateCaptions: (videoPath) => ipcRenderer.invoke('generate-captions', videoPath),
+    
+    // Frame extraction for thumbnails
+    extractFrames: (videoPath, count) => ipcRenderer.invoke('extract-frames', videoPath, count)
 });

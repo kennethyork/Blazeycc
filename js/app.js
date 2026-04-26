@@ -231,6 +231,62 @@ async function init() {
         });
     }
 
+    // AI Features buttons in preview modal
+    document.getElementById('generateChaptersBtn')?.addEventListener('click', async () => {
+        if (!state.lastRecordingPath) return;
+        showNotification('Generating smart chapters...', 'info');
+        const pageData = await extractPageDataForAI();
+        const chapters = await generateSmartChapters(pageData, state.lastRecordingDuration);
+        if (chapters) {
+            renderChapters(chapters);
+            showNotification(`Generated ${chapters.length} chapters!`, 'success');
+        } else {
+            showNotification('Could not generate chapters', 'warning');
+        }
+    });
+
+    document.getElementById('suggestClipBtn')?.addEventListener('click', async () => {
+        if (!state.lastRecordingPath) return;
+        showNotification('Analyzing for social clip...', 'info');
+        const pageData = await extractPageDataForAI();
+        // Simple event log from state
+        const events = [];
+        const clip = await suggestSocialClips(pageData, state.lastRecordingDuration, events);
+        if (clip) {
+            renderSocialClip(clip);
+            showNotification('Social clip suggestion ready!', 'success');
+        } else {
+            showNotification('Could not suggest a clip', 'warning');
+        }
+    });
+
+    document.getElementById('suggestThumbnailBtn')?.addEventListener('click', async () => {
+        if (!state.lastRecordingPath) return;
+        showNotification('Finding best thumbnail frame...', 'info');
+        const pageData = await extractPageDataForAI();
+        const suggestion = await suggestThumbnailFrame(pageData, state.lastRecordingDuration);
+        if (suggestion) {
+            renderThumbnailSuggestion(suggestion);
+            showNotification('Thumbnail suggestion ready!', 'success');
+        } else {
+            showNotification('Could not suggest thumbnail', 'warning');
+        }
+    });
+
+    document.getElementById('generateCaptionsBtn')?.addEventListener('click', async () => {
+        if (!state.lastRecordingPath) return;
+        showNotification('Generating captions with whisper.cpp...', 'info');
+        const result = await window.electronAPI.generateCaptions(state.lastRecordingPath);
+        const preview = document.getElementById('captionsPreview');
+        if (result.success && preview) {
+            preview.textContent = result.srt.substring(0, 2000) + (result.srt.length > 2000 ? '\n...' : '');
+            preview.style.display = 'block';
+            showNotification('Captions generated!', 'success');
+        } else {
+            showNotification('Caption generation failed: ' + result.error, 'error');
+        }
+    });
+
     showNotification('Ready! Enter a URL to get started.', 'info');
 }
 

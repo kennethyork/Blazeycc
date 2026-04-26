@@ -24,7 +24,7 @@ async function loadOllamaConfig() {
 
 async function saveOllamaConfig() {
     state.ollamaConfig.endpoint = elements.ollamaEndpoint?.value?.trim() || 'http://localhost:11434';
-    state.ollamaConfig.model = elements.ollamaModel?.value?.trim() || 'llama3.2';
+    state.ollamaConfig.model = elements.ollamaModel?.value?.trim() || 'qwen2.5:4b';
     try {
         await window.electronAPI.setOllamaConfig(state.ollamaConfig);
     } catch (e) {}

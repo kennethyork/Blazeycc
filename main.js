@@ -1518,6 +1518,169 @@ ipcMain.handle('save-webcam-blob', async (event, { base64, filename }) => {
     }
 });
 
+// =====================
+// WHISPER.CPP AUTO-CAPTIONING
+// =====================
+
+const https = require('https');
+const { pipeline } = require('stream/promises');
+
+const WHISPER_MODEL_NAME = 'ggml-base.en.bin';
+const WHISPER_MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin';
+const WHISPER_BINARIES = {
+    win32: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.4/whisper-blas-bin-x64.zip',
+    linux: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.4/whisper-linux-x64.zip',
+    darwin: 'https://github.com/ggerganov/whisper.cpp/releases/download/v1.7.4/whisper-macos-x64.zip'
+};
+
+function getWhisperDir() {
+    return path.join(app.getPath('userData'), 'whisper');
+}
+
+function getWhisperModelPath() {
+    return path.join(getWhisperDir(), WHISPER_MODEL_NAME);
+}
+
+function getWhisperBinPath() {
+    const ext = process.platform === 'win32' ? '.exe' : '';
+    return path.join(getWhisperDir(), 'whisper-cli' + ext);
+}
+
+async function downloadFile(url, dest) {
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(dest);
+        https.get(url, { timeout: 30000 }, (response) => {
+            if (response.statusCode === 302 || response.statusCode === 301) {
+                downloadFile(response.headers.location, dest).then(resolve).catch(reject);
+                return;
+            }
+            if (response.statusCode !== 200) {
+                reject(new Error(`Download failed: ${response.statusCode}`));
+                return;
+            }
+            response.pipe(file);
+            file.on('finish', () => { file.close(); resolve(); });
+        }).on('error', reject);
+    });
+}
+
+async function ensureWhisperModel() {
+    const modelPath = getWhisperModelPath();
+    if (fs.existsSync(modelPath)) return modelPath;
+    const whisperDir = getWhisperDir();
+    if (!fs.existsSync(whisperDir)) fs.mkdirSync(whisperDir, { recursive: true });
+    console.log('Downloading Whisper model (~50MB)...');
+    await downloadFile(WHISPER_MODEL_URL, modelPath);
+    console.log('Whisper model downloaded');
+    return modelPath;
+}
+
+async function ensureWhisperBinary() {
+    const binPath = getWhisperBinPath();
+    if (fs.existsSync(binPath)) return binPath;
+    // For now, require manual installation or use a bundled binary
+    // Downloading and extracting binaries is complex across platforms
+    // We'll try to use a system-installed whisper-cli first
+    try {
+        const { execSync } = require('child_process');
+        execSync('whisper-cli --help', { stdio: 'ignore' });
+        return 'whisper-cli';
+    } catch (e) {
+        console.warn('whisper-cli not found. Please install whisper.cpp or download from https://github.com/ggerganov/whisper.cpp/releases');
+        return null;
+    }
+}
+
+ipcMain.handle('generate-captions', async (event, videoPath) => {
+    try {
+        const ffmpegPath = getFfmpegPath();
+        const modelPath = await ensureWhisperModel();
+        const whisperBin = await ensureWhisperBinary();
+        if (!whisperBin) {
+            return { success: false, error: 'whisper-cli not found. Install whisper.cpp or download from GitHub releases.' };
+        }
+        if (!modelPath || !fs.existsSync(modelPath)) {
+            return { success: false, error: 'Whisper model not available' };
+        }
+
+        const whisperDir = getWhisperDir();
+        const audioPath = path.join(whisperDir, 'temp_audio.wav');
+        const srtPath = path.join(whisperDir, 'temp_captions.srt');
+
+        // Step 1: Extract audio with FFmpeg
+        await new Promise((resolve, reject) => {
+            ffmpeg(videoPath)
+                .setFfmpegPath(ffmpegPath)
+                .outputOptions(['-vn', '-acodec pcm_s16le', '-ar 16000', '-ac 1'])
+                .output(audioPath)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+
+        // Step 2: Transcribe with whisper.cpp
+        await new Promise((resolve, reject) => {
+            const args = ['-m', modelPath, '-f', audioPath, '-osrt', '-of', path.join(whisperDir, 'temp_captions'), '-l', 'en'];
+            const { spawn } = require('child_process');
+            const child = spawn(whisperBin, args, { cwd: whisperDir });
+            let stderr = '';
+            child.stderr.on('data', (d) => { stderr += d; });
+            child.on('close', (code) => {
+                if (code === 0) resolve();
+                else reject(new Error(stderr || `whisper-cli exited with code ${code}`));
+            });
+        });
+
+        // Step 3: Read SRT
+        const srtContent = fs.readFileSync(srtPath, 'utf8');
+
+        // Cleanup
+        try { fs.unlinkSync(audioPath); } catch (e) {}
+        try { fs.unlinkSync(srtPath); } catch (e) {}
+
+        return { success: true, srt: srtContent };
+    } catch (error) {
+        console.error('Caption generation failed:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Extract frames from video for thumbnail/vision analysis
+ipcMain.handle('extract-frames', async (event, videoPath, count = 10) => {
+    try {
+        const ffmpegPath = getFfmpegPath();
+        const framesDir = path.join(app.getPath('temp'), 'blazeycc-frames-' + Date.now());
+        fs.mkdirSync(framesDir, { recursive: true });
+
+        // Get duration first
+        const duration = await new Promise((resolve, reject) => {
+            ffmpeg.ffprobe(videoPath, (err, metadata) => {
+                if (err) reject(err);
+                else resolve(metadata.format.duration || 10);
+            });
+        });
+
+        const interval = Math.max(1, Math.floor(duration / count));
+
+        await new Promise((resolve, reject) => {
+            ffmpeg(videoPath)
+                .setFfmpegPath(ffmpegPath)
+                .outputOptions(['-vf', `fps=1/${interval},scale=320:-1`])
+                .output(path.join(framesDir, 'frame_%03d.jpg'))
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+
+        const frames = fs.readdirSync(framesDir)
+            .filter(f => f.endsWith('.jpg'))
+            .map(f => path.join(framesDir, f));
+        return { success: true, frames };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
 process.on('uncaughtException', (error) => {
     console.error('Uncaught exception:', error);
 });

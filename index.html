@@ -346,7 +346,7 @@
                         <label for="ollamaEndpoint">Endpoint</label>
                         <input type="text" id="ollamaEndpoint" value="http://localhost:11434" placeholder="http://localhost:11434">
                         <label for="ollamaModel">Model</label>
-                        <input type="text" id="ollamaModel" value="llama3.2" placeholder="llama3.2">
+                        <input type="text" id="ollamaModel" value="qwen2.5:4b" placeholder="qwen2.5:4b">
                         <button id="testOllamaBtn" class="btn btn-small">🔄 Test Connection</button>
                     </div>
                     <details class="ollama-help">
@@ -429,6 +429,13 @@
                         <div id="scheduleList" style="margin-top:0.5rem;max-height:150px;overflow-y:auto;"></div>
                     </div>
                 </div>
+                <div class="setting-item">
+                    <label>
+                        <input type="checkbox" id="autoCaptionToggle">
+                        📝 Auto-Captions (whisper.cpp)
+                    </label>
+                    <p class="help-text">Automatically generates subtitles from recorded audio. Downloads ~50MB model on first use.</p>
+                </div>
                 <!-- Hidden trim inputs for backward compatibility -->
                 <input type="hidden" id="trimStart" value="0">
                 <input type="hidden" id="trimEnd" value="0">
@@ -456,6 +463,19 @@
                         <span id="timelineDurationLabel">--</span>
                         <span id="timelineEndLabel">--</span>
                     </div>
+                </div>
+                <!-- AI Features Panel -->
+                <div class="ai-features-panel" style="margin: 1rem 0; padding: 1rem; background: var(--bg-input); border-radius: 8px;">
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+                        <button id="generateChaptersBtn" class="btn btn-small">📑 Smart Chapters</button>
+                        <button id="suggestClipBtn" class="btn btn-small">🎯 Social Clip</button>
+                        <button id="suggestThumbnailBtn" class="btn btn-small">🖼️ Thumbnail</button>
+                        <button id="generateCaptionsBtn" class="btn btn-small">📝 Captions</button>
+                    </div>
+                    <div id="chaptersList" style="max-height:120px;overflow-y:auto;margin-bottom:0.5rem;"></div>
+                    <div id="socialClipSuggestion" style="margin-bottom:0.5rem;"></div>
+                    <div id="thumbnailSuggestion" style="margin-bottom:0.5rem;"></div>
+                    <div id="captionsPreview" style="max-height:150px;overflow-y:auto;font-size:0.75rem;color:var(--text-secondary);background:var(--bg-secondary);padding:0.5rem;border-radius:4px;display:none;"></div>
                 </div>
                 <div class="preview-actions">
                     <button id="discardBtn" class="btn btn-danger">🗑️ Discard</button>
@@ -525,6 +545,7 @@
     <script src="js/recording.js"></script>
     <script src="js/annotations.js"></script>
     <script src="js/ai.js"></script>
+    <script src="js/ai-features.js"></script>
     <script src="js/features.js"></script>
     <script src="js/app.js"></script>
     <script>

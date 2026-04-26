@@ -174,7 +174,7 @@ const state = {
     annotationEnabled: false,
     annotationTool: 'select',
     zoomLevel: 0,
-    ollamaConfig: { endpoint: 'http://localhost:11434', model: 'llama3.2' },
+    ollamaConfig: { endpoint: 'http://localhost:11434', model: 'qwen2.5:4b' },
     // Webcam capture
     webcamRecorder: null,
     webcamStream: null,

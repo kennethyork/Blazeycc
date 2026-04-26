@@ -76,7 +76,13 @@
                     <div class="placeholder-icon">🌐</div>
                     <p>Enter a URL to start</p>
                 </div>
-                <iframe id="browserFrame" style="display:none;width:100%;height:100%;border:none;" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+                <iframe id="browserFrame" style="display:none;width:100%;height:100%;border:none;"></iframe>
+                <div id="iframeError" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:var(--bg-secondary);z-index:5;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;">
+                    <div style="font-size:3rem;margin-bottom:1rem;">⚠️</div>
+                    <p style="margin-bottom:1rem;">This site can't be displayed in the embedded browser due to security restrictions.</p>
+                    <button id="openInBrowserBtn" class="btn btn-primary">Open in System Browser</button>
+                    <p style="font-size:0.75rem;color:var(--text-muted);margin-top:1rem;">Screen recording will still capture the system browser</p>
+                </div>
                 <canvas id="annotationCanvas" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:10;pointer-events:auto;touch-action:none;"></canvas>
             </div>
         </div>

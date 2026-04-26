@@ -5,6 +5,8 @@ import { ScreenRecorder } from '@blazeycc/screen-recorder';
 import { LocalLlm } from '@blazeycc/local-llm';
 import { Share } from '@capacitor/share';
 import { Toast } from '@capacitor/toast';
+import { Browser } from '@capacitor/browser';
+import { Capacitor } from '@capacitor/core';
 
 // =====================
 // STATE & CONFIG
@@ -169,6 +171,9 @@ function init() {
     // URL loading
     elements.loadBtn.addEventListener('click', loadWebsite);
     elements.urlInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') loadWebsite(); });
+    elements.browserFrame.addEventListener('error', handleIframeError);
+    const openInBrowserBtn = document.getElementById('openInBrowserBtn');
+    if (openInBrowserBtn) openInBrowserBtn.addEventListener('click', openInSystemBrowser);
 
     // Recording
     elements.recordBtn.addEventListener('click', startRecording);
@@ -297,17 +302,38 @@ function loadWebsite() {
     if (!url) return;
     if (!url.match(/^https?:\/\//i)) url = 'https://' + url;
 
+    state.currentUrl = url;
     elements.placeholder.style.display = 'none';
     elements.browserFrame.style.display = 'block';
     elements.browserFrame.src = url;
     state.websiteLoaded = true;
-    state.currentUrl = url;
 
     elements.recordBtn.disabled = false;
     elements.addBookmarkBtn.disabled = false;
 
+    // Hide error overlay if previously shown
+    const errorOverlay = document.getElementById('iframeError');
+    if (errorOverlay) errorOverlay.style.display = 'none';
+
     applyPresetAspectRatio();
     showNotification('Loading website...', 'info');
+}
+
+function handleIframeError() {
+    const errorOverlay = document.getElementById('iframeError');
+    if (errorOverlay) errorOverlay.style.display = 'flex';
+    elements.browserFrame.style.display = 'none';
+    showNotification('Site blocked in embedded browser. Use system browser.', 'warning');
+}
+
+async function openInSystemBrowser() {
+    if (!state.currentUrl) return;
+    try {
+        await Browser.open({ url: state.currentUrl });
+        showNotification('Opened in system browser. Recording still captures screen.', 'info');
+    } catch (e) {
+        showNotification('Failed to open browser', 'error');
+    }
 }
 
 function applyPresetAspectRatio() {
@@ -417,7 +443,8 @@ function hideRecordingIndicator() {
 // =====================
 
 function showPreview(path) {
-    elements.previewVideo.src = 'file://' + path;
+    // Use Capacitor's file path conversion for webview-safe URLs
+    elements.previewVideo.src = Capacitor.convertFileSrc(path);
     elements.previewModal.style.display = 'flex';
 }
 

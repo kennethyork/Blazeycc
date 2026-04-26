@@ -207,14 +207,10 @@ function getFFmpegPath() {
     return ffmpegPath;
 }
 
-// Force CPU-only rendering and disable hardware video encoding
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
+// Disable GPU sandbox for compatibility, but keep hardware acceleration
+// for UI smoothness. GPU encoding is handled separately by FFmpeg.
 app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-accelerated-video-decode');
-app.commandLine.appendSwitch('disable-accelerated-video-encode');
 
 // Set ffmpeg path after app is ready
 app.on('ready', () => {

@@ -79,7 +79,8 @@ for ABI in "${ABIS[@]}"; do
         -DLLAMA_OPENMP=OFF \
         -DLLAMA_BUILD_SERVER=OFF \
         -DLLAMA_BUILD_TESTS=OFF \
-        -DLLAMA_BUILD_EXAMPLES=OFF
+        -DLLAMA_BUILD_EXAMPLES=OFF \
+        -DGGML_LLAMAFILE=OFF
 
     cmake --build "$BUILD_DIR" --config Release -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 

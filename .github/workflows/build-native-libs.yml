@@ -22,8 +22,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Android NDK
         id: setup-ndk

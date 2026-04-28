@@ -277,6 +277,25 @@ ipcMain.handle('get-webview-source', async (event, webviewId) => {
 
 // Save video file (with MP4/GIF conversion and resize)
 ipcMain.handle('save-video', async (event, { filename, data, format, quality, width, height, proSettings }) => {
+    if (!filename || typeof filename !== 'string') {
+        return { success: false, error: 'Invalid filename' };
+    }
+    if (!data || !(data instanceof Uint8Array || Array.isArray(data))) {
+        return { success: false, error: 'Invalid video data' };
+    }
+    if (format && !['mp4', 'webm', 'gif', 'raw'].includes(format)) {
+        return { success: false, error: 'Invalid format. Must be mp4, webm, gif, or raw' };
+    }
+    if (quality && !['low', 'medium', 'high', 'ultra'].includes(quality)) {
+        return { success: false, error: 'Invalid quality. Must be low, medium, high, or ultra' };
+    }
+    if (width && (typeof width !== 'number' || width < 1 || width > 7680)) {
+        return { success: false, error: 'Invalid width (1-7680)' };
+    }
+    if (height && (typeof height !== 'number' || height < 1 || height > 4320)) {
+        return { success: false, error: 'Invalid height (1-4320)' };
+    }
+
     const settings = proSettings || {};
     const useFastEncode = settings.fastEncode;
     const customWatermark = settings.customWatermark;
@@ -907,6 +926,13 @@ ipcMain.handle('cancel-audio-capture', async () => {
 });
 
 ipcMain.handle('start-canvas-recording', async (event, { fps, webContentsId }) => {
+    if (fps && (typeof fps !== 'number' || fps < 1 || fps > 120)) {
+        return { success: false, error: 'Invalid FPS (1-120)' };
+    }
+    if (webContentsId && typeof webContentsId !== 'number') {
+        return { success: false, error: 'Invalid webContentsId' };
+    }
+
     try {
         const ffmpegPath = getFFmpegPath();
         if (!ffmpegPath) {
@@ -1011,6 +1037,12 @@ ipcMain.handle('start-canvas-recording', async (event, { fps, webContentsId }) =
 ipcMain.handle('stop-canvas-recording', async (event, { format, quality, width, height, proSettings }) => {
     if (!canvasRecordingSession) {
         return { success: false, error: 'No active recording session' };
+    }
+    if (format && !['mp4', 'webm', 'gif'].includes(format)) {
+        return { success: false, error: 'Invalid format' };
+    }
+    if (quality && !['low', 'medium', 'high', 'ultra'].includes(quality)) {
+        return { success: false, error: 'Invalid quality' };
     }
 
     const { tempDir, tempVideoPath, ffmpegProcess, captureInterval, getFrameCount, getDroppedFrames, startTime, fps } = canvasRecordingSession;
